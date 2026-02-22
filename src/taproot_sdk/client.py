@@ -69,7 +69,7 @@ class TaprootClient:
         if filters:
             body["filters"] = filters
         r = await self._http.post(
-            f"/api/v1/retrieval/stores/{store_name}/query", json=body,
+            f"/api/v1/retrieval/api/v1/stores/{store_name}/query", json=body,
         )
         r.raise_for_status()
         return r.json()
