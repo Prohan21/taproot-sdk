@@ -117,7 +117,7 @@ def init(
 
     # Configure OTLP exporter
     exporter = _create_otlp_exporter(
-        endpoint=f"{_config['api_url']}/v1/traces",
+        endpoint=f"{_config['api_url']}/api/v1/evals/v1/traces",
         api_key=api_key,
     )
     logger.info(
