@@ -165,26 +165,22 @@ def init(
 
 
 def _create_otlp_exporter(endpoint: str, api_key: str | None) -> Any:
-    """Create OTLP HTTP exporter with optional authentication."""
-    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    """Create OTLP HTTP exporter with JSON serialization.
+
+    Uses JSON (not protobuf) because AWS API Gateway REST API v1 does not
+    support binary media types by default and will corrupt protobuf payloads.
+    """
+    from taproot_sdk.otlp_json_exporter import JsonOtlpSpanExporter
 
     headers: dict[str, str] = {}
     if api_key:
         headers["x-api-key"] = api_key
 
-    # Try to use gzip compression if available
-    try:
-        from opentelemetry.exporter.otlp.proto.http import Compression
-        return OTLPSpanExporter(
-            endpoint=endpoint,
-            headers=headers,
-            compression=Compression.Gzip,
-        )
-    except ImportError:
-        return OTLPSpanExporter(
-            endpoint=endpoint,
-            headers=headers,
-        )
+    return JsonOtlpSpanExporter(
+        endpoint=endpoint,
+        headers=headers,
+        compress=True,
+    )
 
 
 def _setup_auto_instrumentation(libraries: Sequence[str]) -> None:
