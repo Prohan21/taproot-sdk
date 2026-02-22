@@ -1,0 +1,135 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taproot-evals"
+version = "0.1.0"
+description = "Instrumentation SDK for Taproot observability platform - trace LLM calls and custom functions with OpenTelemetry"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "Taproot Team", email = "team@taproot.dev" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
+keywords = ["observability", "tracing", "llm", "opentelemetry", "instrumentation", "ai", "agents"]
+
+dependencies = [
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.21.0",
+    "httpx>=0.25.0",
+]
+
+[project.optional-dependencies]
+# Auto-instrumentation extras for specific LLM providers
+openai = ["opentelemetry-instrumentation-openai>=0.27.0"]
+anthropic = ["opentelemetry-instrumentation-anthropic>=0.27.0"]
+google = ["opentelemetry-instrumentation-google-generativeai>=0.27.0"]
+cohere = ["opentelemetry-instrumentation-cohere>=0.27.0"]
+bedrock = ["opentelemetry-instrumentation-bedrock>=0.27.0"]
+vertexai = ["opentelemetry-instrumentation-vertexai>=0.27.0"]
+mistral = ["opentelemetry-instrumentation-mistralai>=0.27.0"]
+
+# Install all LLM provider instrumentations
+all = [
+    "opentelemetry-instrumentation-openai>=0.27.0",
+    "opentelemetry-instrumentation-anthropic>=0.27.0",
+    "opentelemetry-instrumentation-google-generativeai>=0.27.0",
+    "opentelemetry-instrumentation-cohere>=0.27.0",
+    "opentelemetry-instrumentation-bedrock>=0.27.0",
+    "opentelemetry-instrumentation-vertexai>=0.27.0",
+    "opentelemetry-instrumentation-mistralai>=0.27.0",
+]
+
+# Development dependencies
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+    "respx>=0.20.0",
+    "httpx>=0.25.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/taproot-ai/taproot-sdk"
+Documentation = "https://docs.taproot.dev/sdk"
+Repository = "https://github.com/taproot-ai/taproot-sdk"
+Changelog = "https://github.com/taproot-ai/taproot-sdk/blob/main/CHANGELOG.md"
+Issues = "https://github.com/taproot-ai/taproot-sdk/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taproot_evals"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["taproot_evals"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = []
+
+[[tool.mypy.overrides]]
+module = [
+    "opentelemetry.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["src/taproot_evals"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
