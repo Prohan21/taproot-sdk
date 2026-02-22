@@ -1,7 +1,7 @@
 """
 Core SDK initialization and configuration.
 
-This module provides the main entry point for initializing the Taproot Evals SDK
+This module provides the main entry point for initializing the Taproot SDK
 with OpenTelemetry-based tracing.
 """
 
@@ -42,7 +42,7 @@ def init(
     service_version: str | None = None,
 ) -> Tracer:
     """
-    Initialize the Taproot Evals SDK.
+    Initialize the Taproot SDK.
 
     This must be called once at application startup before any tracing occurs.
 
@@ -66,7 +66,7 @@ def init(
         RuntimeError: If the SDK is already initialized.
 
     Example:
-        >>> import taproot_evals as ev
+        >>> import taproot_sdk as ev
         >>> ev.init(
         ...     project_id="my-project",
         ...     api_url="https://api.taproot.dev",
@@ -78,7 +78,7 @@ def init(
 
     if _initialized:
         raise RuntimeError(
-            "Taproot Evals SDK is already initialized. "
+            "Taproot SDK is already initialized. "
             "Call ev.shutdown() first if you need to reinitialize."
         )
 
@@ -144,7 +144,7 @@ def init(
 
     # Get tracer
     _tracer = trace.get_tracer(
-        instrumenting_module_name="taproot-evals",
+        instrumenting_module_name="taproot-sdk",
         instrumenting_library_version="0.1.0",
     )
 
@@ -189,7 +189,7 @@ def _create_otlp_exporter(endpoint: str, api_key: str | None) -> Any:
 
 def _setup_auto_instrumentation(libraries: Sequence[str]) -> None:
     """Set up auto-instrumentation for specified LLM libraries."""
-    from taproot_evals.auto_instrument import setup_auto_instrumentation
+    from taproot_sdk.auto_instrument import setup_auto_instrumentation
     setup_auto_instrumentation(list(libraries))
 
 
@@ -234,7 +234,7 @@ def get_tracer() -> Tracer:
     """
     if _tracer is None:
         raise RuntimeError(
-            "Taproot Evals SDK not initialized. Call ev.init() first."
+            "Taproot SDK not initialized. Call ev.init() first."
         )
     return _tracer
 

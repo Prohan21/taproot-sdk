@@ -95,7 +95,7 @@ def setup_auto_instrumentation(libraries: list[str] | None = None) -> list[str]:
             # user hasn't installed the optional dependency
             logger.debug(
                 f"Could not instrument '{lib}': {e}. "
-                f"Install with: pip install taproot-evals[{lib}]"
+                f"Install with: pip install taproot-sdk[{lib}]"
             )
         except Exception as e:
             logger.warning(f"Failed to instrument '{lib}': {e}")

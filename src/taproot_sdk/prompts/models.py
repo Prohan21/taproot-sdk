@@ -14,7 +14,7 @@ import warnings
 from dataclasses import dataclass
 from typing import Any
 
-from taproot_evals.prompts.exceptions import MissingVariableError
+from taproot_sdk.prompts.exceptions import MissingVariableError
 
 logger = logging.getLogger(__name__)
 

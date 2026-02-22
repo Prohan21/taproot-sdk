@@ -1,1 +1,1 @@
-"""Tests for the taproot_evals.prompts module."""
+"""Tests for the taproot_sdk.prompts module."""

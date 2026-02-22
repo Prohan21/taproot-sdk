@@ -1,4 +1,4 @@
-"""Tests for taproot_evals.prompts.models module."""
+"""Tests for taproot_sdk.prompts.models module."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import warnings
 
 import pytest
 
-from taproot_evals.prompts.exceptions import MissingVariableError
-from taproot_evals.prompts.models import PromptResponse
+from taproot_sdk.prompts.exceptions import MissingVariableError
+from taproot_sdk.prompts.models import PromptResponse
 
 
 def _make_prompt(

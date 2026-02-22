@@ -1,4 +1,4 @@
-"""Tests for taproot_evals.prompts.client module."""
+"""Tests for taproot_sdk.prompts.client module."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from taproot_evals.prompts.client import PromptClient
-from taproot_evals.prompts.models import PromptResponse
+from taproot_sdk.prompts.client import PromptClient
+from taproot_sdk.prompts.models import PromptResponse
 
 
 def _serving_response(
@@ -66,7 +66,7 @@ class TestPromptClientGet:
         body = _serving_response()
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -89,7 +89,7 @@ class TestPromptClientGet:
         body = _serving_response()
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -110,7 +110,7 @@ class TestPromptClientGet:
         body = _serving_response(version=5)
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -131,7 +131,7 @@ class TestPromptClientGet:
         body = _serving_response(label="production")
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -152,7 +152,7 @@ class TestPromptClientGet:
         body = _serving_response()
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -183,7 +183,7 @@ class TestPromptClientGet:
         body = _serving_response(schema_version=99)
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -211,7 +211,7 @@ class TestPromptClientGet:
         )
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -239,7 +239,7 @@ class TestPromptClientGet:
         body = _serving_response()
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -265,7 +265,7 @@ class TestPromptClientGetSync:
         body = _serving_response()
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -286,7 +286,7 @@ class TestPromptClientGetSync:
         body = _serving_response(version=2)
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)
@@ -308,7 +308,7 @@ class TestPromptClientGetSync:
         body = _serving_response(label="prod")
         mock_response = _mock_httpx_response(body)
 
-        with patch("taproot_evals.prompts.client.httpx.AsyncClient") as mock_cls:
+        with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
             mock_http.__aenter__ = AsyncMock(return_value=mock_http)

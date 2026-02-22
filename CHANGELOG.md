@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial release of Taproot Evals SDK
+- Initial release of Taproot SDK
 - `ev.init()` for SDK initialization with OpenTelemetry backend
 - `@ev.instrument()` decorator for tracing custom functions
 - Auto-instrumentation support for LLM libraries:

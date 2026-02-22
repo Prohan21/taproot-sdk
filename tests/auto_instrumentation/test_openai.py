@@ -13,7 +13,7 @@ class TestOpenAIInstrumentation:
 
     def test_instrument_openai(self):
         """Test instrumenting OpenAI SDK."""
-        with patch("taproot_evals.auto_instrument.instrument_openai") as mock_instrument:
+        with patch("taproot_sdk.auto_instrument.instrument_openai") as mock_instrument:
             mock_instrument.return_value = True
 
             result = mock_instrument()
@@ -22,7 +22,7 @@ class TestOpenAIInstrumentation:
 
     def test_instrument_chat_completions(self):
         """Test instrumenting chat completions."""
-        with patch("taproot_evals.auto_instrument.OpenAIInstrumentor") as MockInstrumentor:
+        with patch("taproot_sdk.auto_instrument.OpenAIInstrumentor") as MockInstrumentor:
             instrumentor = MockInstrumentor()
             instrumentor.instrument = Mock(return_value=True)
 
@@ -37,7 +37,7 @@ class TestOpenAIChatCapture:
     @pytest.mark.asyncio
     async def test_capture_chat_completion(self):
         """Test capturing a chat completion call."""
-        with patch("taproot_evals.auto_instrument.capture_openai_call") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_openai_call") as mock_capture:
             mock_capture.return_value = {
                 "model": "gpt-4",
                 "messages": [{"role": "user", "content": "Hello"}],
@@ -56,7 +56,7 @@ class TestOpenAIChatCapture:
     @pytest.mark.asyncio
     async def test_capture_streaming_completion(self):
         """Test capturing a streaming chat completion."""
-        with patch("taproot_evals.auto_instrument.capture_streaming_call") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_streaming_call") as mock_capture:
             mock_capture.return_value = {
                 "model": "gpt-4",
                 "streaming": True,
@@ -74,7 +74,7 @@ class TestOpenAISpanCreation:
 
     def test_create_llm_span(self):
         """Test creating an LLM span."""
-        with patch("taproot_evals.auto_instrument.create_span") as mock_create:
+        with patch("taproot_sdk.auto_instrument.create_span") as mock_create:
             mock_create.return_value = Mock(id="span-123")
 
             span = mock_create(
@@ -86,7 +86,7 @@ class TestOpenAISpanCreation:
 
     def test_span_includes_model_info(self):
         """Test that span includes model information."""
-        with patch("taproot_evals.auto_instrument.create_span") as mock_create:
+        with patch("taproot_sdk.auto_instrument.create_span") as mock_create:
             mock_create.return_value = Mock(
                 id="span-123",
                 metadata={"model": "gpt-4", "provider": "openai"},
@@ -101,7 +101,7 @@ class TestOpenAISpanCreation:
 
     def test_span_captures_tokens(self):
         """Test that span captures token usage."""
-        with patch("taproot_evals.auto_instrument.finalize_span") as mock_finalize:
+        with patch("taproot_sdk.auto_instrument.finalize_span") as mock_finalize:
             mock_finalize.return_value = Mock(
                 usage={"prompt_tokens": 10, "completion_tokens": 20}
             )
@@ -121,7 +121,7 @@ class TestOpenAIErrorCapture:
     @pytest.mark.asyncio
     async def test_capture_rate_limit_error(self):
         """Test capturing rate limit error."""
-        with patch("taproot_evals.auto_instrument.capture_error") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_error") as mock_capture:
             mock_capture.return_value = {
                 "error_type": "RateLimitError",
                 "message": "Rate limit exceeded",
@@ -137,7 +137,7 @@ class TestOpenAIErrorCapture:
     @pytest.mark.asyncio
     async def test_capture_api_error(self):
         """Test capturing API error."""
-        with patch("taproot_evals.auto_instrument.capture_error") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_error") as mock_capture:
             mock_capture.return_value = {
                 "error_type": "APIError",
                 "status_code": 500,
@@ -157,7 +157,7 @@ class TestOpenAIFunctionCalls:
     @pytest.mark.asyncio
     async def test_capture_function_call(self):
         """Test capturing a function call."""
-        with patch("taproot_evals.auto_instrument.capture_function_call") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_function_call") as mock_capture:
             mock_capture.return_value = {
                 "function_name": "get_weather",
                 "arguments": {"location": "New York"},
@@ -173,7 +173,7 @@ class TestOpenAIFunctionCalls:
     @pytest.mark.asyncio
     async def test_capture_tool_call(self):
         """Test capturing a tool call."""
-        with patch("taproot_evals.auto_instrument.capture_tool_call") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_tool_call") as mock_capture:
             mock_capture.return_value = {
                 "tool_call_id": "call-123",
                 "tool_name": "calculator",

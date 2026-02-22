@@ -1,8 +1,8 @@
-"""Tests for taproot_evals.auto_instrument module."""
+"""Tests for taproot_sdk.auto_instrument module."""
 
 import pytest
 
-from taproot_evals.auto_instrument import (
+from taproot_sdk.auto_instrument import (
     INSTRUMENTORS,
     get_instrumented_libraries,
     is_instrumented,

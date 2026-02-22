@@ -2,7 +2,7 @@
 
 import pytest
 
-from taproot_evals import shutdown
+from taproot_sdk import shutdown
 
 
 @pytest.fixture(autouse=True)

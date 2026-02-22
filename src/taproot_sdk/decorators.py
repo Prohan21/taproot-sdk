@@ -103,7 +103,7 @@ def instrument(
 
         @functools.wraps(func)
         def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            tracer = trace.get_tracer("taproot-evals")
+            tracer = trace.get_tracer("taproot-sdk")
             start_time = time.perf_counter()
 
             with tracer.start_as_current_span(span_name) as span:
@@ -162,7 +162,7 @@ def instrument(
         async def async_wrapper(
             *args: P.args, **kwargs: P.kwargs
         ) -> Coroutine[Any, Any, R]:
-            tracer = trace.get_tracer("taproot-evals")
+            tracer = trace.get_tracer("taproot-sdk")
             start_time = time.perf_counter()
 
             with tracer.start_as_current_span(span_name) as span:

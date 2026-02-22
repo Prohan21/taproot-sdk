@@ -1,9 +1,9 @@
-"""Tests for taproot_evals.decorators module."""
+"""Tests for taproot_sdk.decorators module."""
 
 import pytest
 
-import taproot_evals as ev
-from taproot_evals.decorators import instrument
+import taproot_sdk as ev
+from taproot_sdk.decorators import instrument
 
 
 @pytest.fixture

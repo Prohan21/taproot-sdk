@@ -1,4 +1,4 @@
-"""Tests for taproot_evals.prompts.cache module.
+"""Tests for taproot_sdk.prompts.cache module.
 
 Covers the five core behaviours of the L1 in-memory cache:
     1. Fresh cache hit -- returns cached, no HTTP call.
@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from taproot_evals.prompts.cache import PromptCache, _CacheEntry, _make_cache_key
-from taproot_evals.prompts.models import PromptResponse
+from taproot_sdk.prompts.cache import PromptCache, _CacheEntry, _make_cache_key
+from taproot_sdk.prompts.models import PromptResponse
 
 
 # ---------------------------------------------------------------------------

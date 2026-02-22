@@ -1,1 +1,1 @@
-"""Tests for taproot_evals SDK."""
+"""Tests for taproot_sdk SDK."""

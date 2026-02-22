@@ -1,9 +1,9 @@
-"""Tests for taproot_evals.core module."""
+"""Tests for taproot_sdk.core module."""
 
 import pytest
 
-import taproot_evals as ev
-from taproot_evals.core import get_config, is_initialized
+import taproot_sdk as ev
+from taproot_sdk.core import get_config, is_initialized
 
 
 class TestInit:

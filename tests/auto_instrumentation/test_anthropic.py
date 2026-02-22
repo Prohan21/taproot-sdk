@@ -13,7 +13,7 @@ class TestAnthropicInstrumentation:
 
     def test_instrument_anthropic(self):
         """Test instrumenting Anthropic SDK."""
-        with patch("taproot_evals.auto_instrument.instrument_anthropic") as mock_instrument:
+        with patch("taproot_sdk.auto_instrument.instrument_anthropic") as mock_instrument:
             mock_instrument.return_value = True
 
             result = mock_instrument()
@@ -22,7 +22,7 @@ class TestAnthropicInstrumentation:
 
     def test_instrument_messages_create(self):
         """Test instrumenting messages.create."""
-        with patch("taproot_evals.auto_instrument.AnthropicInstrumentor") as MockInstrumentor:
+        with patch("taproot_sdk.auto_instrument.AnthropicInstrumentor") as MockInstrumentor:
             instrumentor = MockInstrumentor()
             instrumentor.instrument = Mock(return_value=True)
 
@@ -37,7 +37,7 @@ class TestAnthropicMessageCapture:
     @pytest.mark.asyncio
     async def test_capture_message(self):
         """Test capturing a message call."""
-        with patch("taproot_evals.auto_instrument.capture_anthropic_call") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_anthropic_call") as mock_capture:
             mock_capture.return_value = {
                 "model": "claude-3-sonnet-20240229",
                 "messages": [{"role": "user", "content": "Hello"}],
@@ -55,7 +55,7 @@ class TestAnthropicMessageCapture:
     @pytest.mark.asyncio
     async def test_capture_streaming_message(self):
         """Test capturing a streaming message."""
-        with patch("taproot_evals.auto_instrument.capture_streaming_call") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_streaming_call") as mock_capture:
             mock_capture.return_value = {
                 "model": "claude-3-sonnet-20240229",
                 "streaming": True,
@@ -72,7 +72,7 @@ class TestAnthropicSpanCreation:
 
     def test_create_anthropic_span(self):
         """Test creating an Anthropic span."""
-        with patch("taproot_evals.auto_instrument.create_span") as mock_create:
+        with patch("taproot_sdk.auto_instrument.create_span") as mock_create:
             mock_create.return_value = Mock(id="span-456")
 
             span = mock_create(
@@ -84,7 +84,7 @@ class TestAnthropicSpanCreation:
 
     def test_span_includes_system_prompt(self):
         """Test that span captures system prompt."""
-        with patch("taproot_evals.auto_instrument.create_span") as mock_create:
+        with patch("taproot_sdk.auto_instrument.create_span") as mock_create:
             mock_create.return_value = Mock(
                 id="span-456",
                 input={"system": "You are a helpful assistant."},
@@ -104,7 +104,7 @@ class TestAnthropicToolUse:
     @pytest.mark.asyncio
     async def test_capture_tool_use(self):
         """Test capturing tool use blocks."""
-        with patch("taproot_evals.auto_instrument.capture_tool_use") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_tool_use") as mock_capture:
             mock_capture.return_value = {
                 "tool_use_id": "toolu_123",
                 "name": "get_weather",
@@ -122,7 +122,7 @@ class TestAnthropicToolUse:
     @pytest.mark.asyncio
     async def test_capture_tool_result(self):
         """Test capturing tool result blocks."""
-        with patch("taproot_evals.auto_instrument.capture_tool_result") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_tool_result") as mock_capture:
             mock_capture.return_value = {
                 "tool_use_id": "toolu_123",
                 "content": "72°F, sunny",
@@ -142,7 +142,7 @@ class TestAnthropicErrorCapture:
     @pytest.mark.asyncio
     async def test_capture_overloaded_error(self):
         """Test capturing overloaded error."""
-        with patch("taproot_evals.auto_instrument.capture_error") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_error") as mock_capture:
             mock_capture.return_value = {
                 "error_type": "OverloadedError",
                 "message": "API is temporarily overloaded",
@@ -158,7 +158,7 @@ class TestAnthropicErrorCapture:
     @pytest.mark.asyncio
     async def test_capture_rate_limit_error(self):
         """Test capturing rate limit error."""
-        with patch("taproot_evals.auto_instrument.capture_error") as mock_capture:
+        with patch("taproot_sdk.auto_instrument.capture_error") as mock_capture:
             mock_capture.return_value = {
                 "error_type": "RateLimitError",
                 "retry_after": 60,
@@ -178,7 +178,7 @@ class TestAnthropicContentBlocks:
     @pytest.mark.asyncio
     async def test_parse_text_block(self):
         """Test parsing text content blocks."""
-        with patch("taproot_evals.auto_instrument.parse_content_block") as mock_parse:
+        with patch("taproot_sdk.auto_instrument.parse_content_block") as mock_parse:
             mock_parse.return_value = {
                 "type": "text",
                 "text": "Hello, world!",
@@ -191,7 +191,7 @@ class TestAnthropicContentBlocks:
     @pytest.mark.asyncio
     async def test_parse_tool_use_block(self):
         """Test parsing tool use content blocks."""
-        with patch("taproot_evals.auto_instrument.parse_content_block") as mock_parse:
+        with patch("taproot_sdk.auto_instrument.parse_content_block") as mock_parse:
             mock_parse.return_value = {
                 "type": "tool_use",
                 "id": "toolu_123",

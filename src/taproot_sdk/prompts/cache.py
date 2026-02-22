@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
-from taproot_evals.prompts.models import PromptResponse
+from taproot_sdk.prompts.models import PromptResponse
 
 logger = logging.getLogger(__name__)
 

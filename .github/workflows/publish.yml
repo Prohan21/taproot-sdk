@@ -81,4 +81,4 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         # Uses trusted publishing - configure at:
-        # https://pypi.org/manage/project/taproot-evals/settings/publishing/
+        # https://pypi.org/manage/project/taproot-sdk/settings/publishing/

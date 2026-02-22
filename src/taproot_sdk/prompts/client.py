@@ -13,8 +13,8 @@ from typing import Any
 
 import httpx
 
-from taproot_evals.prompts.cache import PromptCache
-from taproot_evals.prompts.models import PromptResponse
+from taproot_sdk.prompts.cache import PromptCache
+from taproot_sdk.prompts.models import PromptResponse
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +203,7 @@ class PromptClient:
             raise ValueError(
                 f"Unsupported schema_version: {schema_version}. "
                 f"This SDK supports schema_version={_SUPPORTED_SCHEMA_VERSION}. "
-                f"Please upgrade taproot-evals."
+                f"Please upgrade taproot-sdk."
             )
 
         required_variables = data.get("required_variables", [])
