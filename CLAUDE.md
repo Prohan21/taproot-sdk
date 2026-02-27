@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-OpenTelemetry-based instrumentation SDK for tracing LLM calls and custom functions. Exports spans via OTLP HTTP with gzip compression to Taproot observability platform.
+OpenTelemetry-based instrumentation SDK for tracing LLM calls and custom functions. Exports spans via OTLP HTTP with gzip compression to Taproot observability platform. Also provides a unified `TaprootClient` for interacting with all Taproot platform services (Evals-S, Prompt-S, Retrieval-S) behind the APIM gateway, with typed return models for evals and prompts.
 
 ## Build & Install Commands
 
@@ -39,10 +39,13 @@ ruff format --check src/
 
 ### Module Structure
 
-- `src/taproot_sdk/__init__.py` — Public API exports: `init`, `shutdown`, `get_tracer`, `is_initialized`, `instrument`
+- `src/taproot_sdk/__init__.py` — Public API surface: `init`, `shutdown`, `get_tracer`, `is_initialized`, `instrument`, `TaprootClient`, `EvalResult`, `RunHandle`, `assert_eval`, `EvalAssertionError`, `PromptClient`, `PromptResponse`, `MissingVariableError`
 - `src/taproot_sdk/core.py` — SDK initialization, TracerProvider setup, OTLP exporter configuration
 - `src/taproot_sdk/decorators.py` — `@instrument()` decorator for custom function tracing
 - `src/taproot_sdk/auto_instrument.py` — Auto-instrumentation loader for LLM libraries
+- `src/taproot_sdk/client.py` — Unified async HTTP client for all Taproot platform services via APIM gateway
+- `src/taproot_sdk/evals/` — Eval models, assertions, and pytest plugin
+- `src/taproot_sdk/prompts/` — Prompt client with caching, rendering, and integrity verification
 
 ### Key Exports
 
@@ -54,6 +57,27 @@ ruff format --check src/
 
 **Decorator** (`decorators.py`):
 - `@instrument(spankind, name, ignore_inputs, ignore_outputs, max_attribute_size)` — Decorator for tracing sync/async functions. Captures inputs/outputs as JSON, duration in ms, and exceptions. Supports partial input redaction via list of parameter names.
+
+**Unified Client** (`client.py` — `TaprootClient`):
+- Constructor: `base_url, api_key, project_id, timeout`. Pulls from SDK config if `ev.init()` was called.
+- All methods are async and return typed models (not raw dicts).
+- Evals: `trigger_eval_run() -> RunHandle`, `get_eval_run() -> EvalResult`, `wait_for_eval() -> EvalResult`
+- Prompts: `get_prompt() -> PromptResponse` (renders via `response.render(var=val)`)
+- Retrieval: `retrieval_query() -> dict` (raw dict — no typed model yet)
+- Health: `health_retrieval()`, `health_evals()`, `health_guardrails()`
+
+**Evals** (`evals/`):
+- `EvalResult` — Frozen dataclass: `run_id`, `status`, `total_items`, `completed_items`, `failed_items`, `aggregate_scores`, `started_at`, `completed_at`, `error_message`, `tags`. Properties: `pass_rate`, `duration_ms`. Classmethod: `from_api_response(data)`.
+- `RunHandle` — Frozen dataclass: `run_id`, `status`, `message`
+- `AggregateScore` — Frozen dataclass: `mean`, `min`, `max`, `std_dev`, `passed`, `failed`
+- `assert_eval(result, *, min_pass_rate, min_score, max_duration_ms)` — CI/CD assertion helper. Raises `EvalAssertionError` on failure.
+- `EvalAssertionError` — Exception subclass with `.result` attribute for debugging.
+- `pytest_plugin.py` — Provides `eval_client` and `eval_run` fixtures. Reads `TAPROOT_EVAL_URL`, `TAPROOT_API_KEY_ID`, `TAPROOT_PROJECT_ID` from env.
+
+**Prompts** (`prompts/`):
+- `PromptClient` — Standalone async client with L1 in-memory cache (stale-while-revalidate). Has `get()` async and `get_sync()` convenience wrapper.
+- `PromptResponse` — Frozen dataclass: `schema_version`, `name`, `version`, `content`, `content_hash`, `config`, `required_variables`, `label`, `cached_at`. Methods: `render(**variables)`, `verify_hash()`.
+- `MissingVariableError` — Raised when `render()` is called without required variables.
 
 ### Span Kinds (9 types)
 
@@ -138,9 +162,21 @@ Batch processor config (verified in `core.py`):
 
 | File | Purpose |
 |------|---------|
-| `src/taproot_sdk/__init__.py` | Public API surface (5 exports) |
+| `src/taproot_sdk/__init__.py` | Public API surface (13 exports) |
 | `src/taproot_sdk/core.py` | SDK initialization, OTLP exporter setup |
 | `src/taproot_sdk/decorators.py` | `@instrument()` decorator with sync/async support |
 | `src/taproot_sdk/auto_instrument.py` | Dynamic LLM library instrumentation |
+| `src/taproot_sdk/client.py` | `TaprootClient` — unified async client for all services |
+| `src/taproot_sdk/evals/__init__.py` | Eval module exports |
+| `src/taproot_sdk/evals/models.py` | `EvalResult`, `RunHandle`, `AggregateScore` frozen dataclasses |
+| `src/taproot_sdk/evals/assertions.py` | `assert_eval()` CI/CD assertion helper |
+| `src/taproot_sdk/evals/exceptions.py` | `EvalAssertionError` with `.result` attribute |
+| `src/taproot_sdk/evals/pytest_plugin.py` | `eval_client` and `eval_run` pytest fixtures |
+| `src/taproot_sdk/prompts/client.py` | `PromptClient` — standalone prompt client with caching |
+| `src/taproot_sdk/prompts/models.py` | `PromptResponse` frozen dataclass with `render()` and `verify_hash()` |
+| `src/taproot_sdk/prompts/cache.py` | `PromptCache` — LRU with stale-while-revalidate |
+| `src/taproot_sdk/prompts/exceptions.py` | `MissingVariableError` |
 | `pyproject.toml` | Package metadata, dependencies, tool config (ruff line-length 100, mypy strict) |
 | `tests/conftest.py` | Pytest fixtures with auto SDK reset |
+| `tests/evals/test_models.py` | Tests for `EvalResult`, `RunHandle` |
+| `tests/evals/test_assertions.py` | Tests for `assert_eval()` with pass/fail scenarios |

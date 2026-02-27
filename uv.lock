@@ -1209,7 +1209,7 @@ wheels = [
 ]
 
 [[package]]
-name = "taproot-evals"
+name = "taproot-sdk"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

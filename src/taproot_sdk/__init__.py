@@ -26,6 +26,7 @@ Prompt fetching:
 from taproot_sdk.client import TaprootClient
 from taproot_sdk.core import get_tracer, init, is_initialized, shutdown
 from taproot_sdk.decorators import instrument
+from taproot_sdk.evals import EvalAssertionError, EvalResult, RunHandle, assert_eval
 from taproot_sdk.prompts import MissingVariableError, PromptClient, PromptResponse
 
 __version__ = "0.1.0"
@@ -44,6 +45,11 @@ __all__ = [
     "PromptClient",
     "PromptResponse",
     "MissingVariableError",
+    # Evals
+    "EvalResult",
+    "RunHandle",
+    "assert_eval",
+    "EvalAssertionError",
     # Version
     "__version__",
 ]

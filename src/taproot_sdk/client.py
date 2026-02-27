@@ -14,11 +14,15 @@ APIM routes:
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
 import httpx
 
 from taproot_sdk.core import get_config, is_initialized
+from taproot_sdk.evals.models import EvalResult, RunHandle
+from taproot_sdk.prompts.models import PromptResponse
 
 
 class TaprootClient:
@@ -82,10 +86,22 @@ class TaprootClient:
         version: int | None = None,
         label: str | None = None,
         project_id: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> PromptResponse:
         """Fetch a prompt template from Prompt-S.
 
         GET /api/v1/prompts/serve/{project_id}/{name}
+
+        Args:
+            name: The prompt name identifier.
+            version: Optional specific version number to fetch.
+            label: Optional label (e.g. "production") to resolve.
+            project_id: Override project ID (defaults to client's project_id).
+
+        Returns:
+            PromptResponse with template content, variables, and metadata.
+
+        Raises:
+            httpx.HTTPStatusError: If the server returns a non-2xx status.
         """
         pid = project_id or self.project_id
         params: dict[str, Any] = {}
@@ -97,7 +113,18 @@ class TaprootClient:
             f"/api/v1/prompts/serve/{pid}/{name}", params=params,
         )
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+        return PromptResponse(
+            schema_version=data.get("schema_version", 1),
+            name=data["name"],
+            version=data["version"],
+            content=data["content"],
+            content_hash=data["content_hash"],
+            config=data.get("config", {}),
+            required_variables=tuple(data.get("required_variables", [])),
+            label=data.get("label"),
+            cached_at=data.get("cached_at"),
+        )
 
     # -- Health --
 
@@ -115,3 +142,108 @@ class TaprootClient:
         r = await self._http.get("/api/v1/guardrails/health")
         r.raise_for_status()
         return r.json()
+
+    # -- Evals-S --
+
+    async def trigger_eval_run(
+        self,
+        test_config_id: str,
+        *,
+        tags: list[str] | None = None,
+        description: str | None = None,
+        project_id: str | None = None,
+    ) -> RunHandle:
+        """Trigger a new evaluation run.
+
+        Args:
+            test_config_id: UUID of the test configuration to run.
+            tags: Optional tags for the run.
+            description: Optional description for the run.
+            project_id: Override project ID (defaults to client's project_id).
+
+        Returns:
+            RunHandle with run_id and status.
+        """
+        pid = project_id or self.project_id
+        body: dict[str, Any] = {"test_config_id": test_config_id}
+        if tags is not None:
+            body["tags"] = tags
+        if description is not None:
+            body["description"] = description
+
+        r = await self._http.post(
+            f"/api/v1/evals/v1/projects/{pid}/test-runs/trigger",
+            json=body,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return RunHandle(
+            run_id=str(data["run_id"]),
+            status=data["status"],
+            message=data.get("message", ""),
+        )
+
+    async def get_eval_run(
+        self,
+        run_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> EvalResult:
+        """Get current state of an evaluation run.
+
+        Args:
+            run_id: UUID of the test run.
+            project_id: Override project ID.
+
+        Returns:
+            EvalResult with current run state.
+        """
+        pid = project_id or self.project_id
+        r = await self._http.get(
+            f"/api/v1/evals/v1/projects/{pid}/test-runs/{run_id}",
+        )
+        r.raise_for_status()
+        return EvalResult.from_api_response(r.json())
+
+    async def wait_for_eval(
+        self,
+        run_id: str,
+        *,
+        timeout: float = 300,
+        poll_interval: float = 5,
+        project_id: str | None = None,
+    ) -> EvalResult:
+        """Wait for an evaluation run to complete.
+
+        Polls the Evals-S API until the run reaches a terminal state
+        (completed, failed, cancelled) or the timeout is exceeded.
+
+        Args:
+            run_id: UUID of the test run.
+            timeout: Maximum seconds to wait (default 300).
+            poll_interval: Seconds between polls (default 5).
+            project_id: Override project ID.
+
+        Returns:
+            EvalResult with final run state.
+
+        Raises:
+            TimeoutError: If the run doesn't complete within the timeout.
+        """
+        start = time.monotonic()
+
+        while True:
+            result = await self.get_eval_run(run_id, project_id=project_id)
+
+            if result.status in ("completed", "failed", "cancelled"):
+                return result
+
+            elapsed = time.monotonic() - start
+            if elapsed >= timeout:
+                raise TimeoutError(
+                    f"Eval run {run_id} did not complete within {timeout}s. "
+                    f"Current status: {result.status}, "
+                    f"progress: {result.completed_items}/{result.total_items}"
+                )
+
+            await asyncio.sleep(poll_interval)
