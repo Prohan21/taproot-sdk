@@ -14,10 +14,18 @@ Usage:
 
 from taproot_sdk.prompts.client import PromptClient
 from taproot_sdk.prompts.exceptions import MissingVariableError
-from taproot_sdk.prompts.models import PromptResponse
+from taproot_sdk.prompts.models import (
+    ChatMessage,
+    PromptResponse,
+    PromptType,
+    ToolDefinition,
+)
 
 __all__ = [
+    "ChatMessage",
     "PromptClient",
     "PromptResponse",
+    "PromptType",
+    "ToolDefinition",
     "MissingVariableError",
 ]

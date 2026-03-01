@@ -6,10 +6,19 @@ the route path the load balancer expects. If the SDK has been initialized
 via ev.init(), the client can pull config from there automatically.
 
 APIM routes:
-  /api/v1/retrieval/...  -> Retrieval-S
-  /api/v1/evals/...      -> Evals-S
-  /api/v1/guardrails/... -> Guardrail-S
-  /api/v1/prompts/...    -> Prompt-S
+  /api/v1/retrieval/{proxy+}  -> Retrieval-S  (proxy forwarded as-is)
+  /api/v1/evals/{proxy+}      -> Evals-S      (proxy forwarded as-is)
+  /api/v1/guardrails/{proxy+} -> Guardrail-S  (proxy forwarded as-is)
+  /api/v1/prompts/{proxy+}    -> Prompt-S Management
+  /serve/{proxy+}             -> Prompt-S Serving (Lambda / Azure Function)
+
+Each backend service has its own internal URL prefix:
+  Retrieval-S:  /api/v1/...  (e.g. /api/v1/stores/{name}/query)
+  Evals-S:      /v1/...      (e.g. /v1/projects/{pid}/test-runs/trigger)
+  Guardrail-S:  /...         (e.g. /health)
+  Prompt-S Serving: /serve/... (e.g. /serve/{pid}/{name})
+
+The full APIM path = APIM prefix + internal service path.
 """
 
 from __future__ import annotations
@@ -87,9 +96,12 @@ class TaprootClient:
         label: str | None = None,
         project_id: str | None = None,
     ) -> PromptResponse:
-        """Fetch a prompt template from Prompt-S.
+        """Fetch a prompt template from the Prompt-S serving layer.
 
-        GET /api/v1/prompts/serve/{project_id}/{name}
+        GET /serve/{project_id}/{name}
+
+        The serving layer is a separate APIM route (/serve/{proxy+}) backed
+        by Lambda (AWS) or Azure Functions.  It is NOT under /api/v1/prompts/.
 
         Args:
             name: The prompt name identifier.
@@ -110,7 +122,7 @@ class TaprootClient:
         if label is not None:
             params["label"] = label
         r = await self._http.get(
-            f"/api/v1/prompts/serve/{pid}/{name}", params=params,
+            f"/serve/{pid}/{name}", params=params,
         )
         r.raise_for_status()
         data = r.json()
