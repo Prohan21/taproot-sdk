@@ -15,19 +15,81 @@ Usage:
     def my_function():
         pass
 
-Prompt fetching:
-    from taproot_sdk.prompts import PromptClient
-
-    client = PromptClient(serving_url="https://prompts.taproot.dev", api_key="key-id")
-    prompt = await client.get("my-project", "welcome-email")
+Prompt management and serving:
+    client = ev.TaprootClient(
+        base_url="https://gateway.taproot.dev",
+        api_key="your-api-key",
+        project_id="my-project",
+    )
+    prompt = await client.get_prompt("welcome-email")
     rendered = prompt.render(user_name="Alice")
 """
 
 from taproot_sdk.client import TaprootClient
 from taproot_sdk.core import get_tracer, init, is_initialized, shutdown
 from taproot_sdk.decorators import instrument
-from taproot_sdk.evals import EvalAssertionError, EvalResult, RunHandle, assert_eval
-from taproot_sdk.prompts import MissingVariableError, PromptClient, PromptResponse
+from taproot_sdk.evals import (
+    EvalAssertionError,
+    EvalResult,
+    Experiment,
+    GoldenDataset,
+    GoldenDatasetItem,
+    GoldenDatasetVersion,
+    PaginatedList,
+    RunHandle,
+    TestConfiguration,
+    assert_eval,
+)
+from taproot_sdk.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    PromptNotFoundError,
+    RateLimitError,
+    ServerError,
+    TaprootAPIError,
+    TaprootError,
+    ValidationError,
+)
+from taproot_sdk.guardrails import (
+    AnalyticsSummary,
+    CheckResult,
+    GuardrailConfig,
+    GuardrailResponse,
+    ScannerOverride,
+    ScannerSignal,
+)
+from taproot_sdk.prompts import MissingVariableError, PromptResponse
+from taproot_sdk.retrieval import (
+    AccessGrant,
+    AccessGranted,
+    AccessList,
+    AccessRevoked,
+    BatchCancelled,
+    BatchCreated,
+    BatchJobList,
+    BatchStatus,
+    ChunkInfo,
+    ChunkList,
+    ChunksDeleted,
+    ChunksUploaded,
+    DocumentDeleted,
+    DocumentDetail,
+    DocumentInfo,
+    DocumentList,
+    IndexParams,
+    IngestionJob,
+    JobCancelled,
+    JobDetail,
+    JobList,
+    JobSummary,
+    QueryHit,
+    QueryResponse,
+    StoreCreated,
+    StoreDeleted,
+    StoreInfo,
+    StoreList,
+    StoreStatistics,
+)
 
 __version__ = "0.1.0"
 
@@ -41,8 +103,16 @@ __all__ = [
     "is_initialized",
     # Decorators
     "instrument",
+    # Exceptions
+    "TaprootError",
+    "TaprootAPIError",
+    "PromptNotFoundError",
+    "AuthenticationError",
+    "ConflictError",
+    "RateLimitError",
+    "ServerError",
+    "ValidationError",
     # Prompts
-    "PromptClient",
     "PromptResponse",
     "MissingVariableError",
     # Evals
@@ -50,6 +120,49 @@ __all__ = [
     "RunHandle",
     "assert_eval",
     "EvalAssertionError",
+    "GoldenDataset",
+    "GoldenDatasetItem",
+    "GoldenDatasetVersion",
+    "TestConfiguration",
+    "Experiment",
+    "PaginatedList",
+    # Guardrails
+    "AnalyticsSummary",
+    "CheckResult",
+    "GuardrailConfig",
+    "GuardrailResponse",
+    "ScannerOverride",
+    "ScannerSignal",
+    # Retrieval
+    "IndexParams",
+    "StoreInfo",
+    "StoreList",
+    "StoreCreated",
+    "StoreDeleted",
+    "StoreStatistics",
+    "AccessGrant",
+    "AccessGranted",
+    "AccessList",
+    "AccessRevoked",
+    "QueryHit",
+    "QueryResponse",
+    "IngestionJob",
+    "JobDetail",
+    "JobList",
+    "JobSummary",
+    "JobCancelled",
+    "BatchCreated",
+    "BatchStatus",
+    "BatchJobList",
+    "BatchCancelled",
+    "DocumentInfo",
+    "DocumentDetail",
+    "DocumentList",
+    "DocumentDeleted",
+    "ChunkInfo",
+    "ChunkList",
+    "ChunksUploaded",
+    "ChunksDeleted",
     # Version
     "__version__",
 ]

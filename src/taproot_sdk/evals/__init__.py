@@ -12,11 +12,48 @@ Usage:
 
 from taproot_sdk.evals.assertions import assert_eval
 from taproot_sdk.evals.exceptions import EvalAssertionError
-from taproot_sdk.evals.models import EvalResult, RunHandle
+from taproot_sdk.evals.models import (
+    AlertHistory,
+    AlertRule,
+    DiscoverySession,
+    DiscoverySuggestion,
+    EvalResult,
+    Experiment,
+    ExportResult,
+    GoldenDataset,
+    GoldenDatasetItem,
+    GoldenDatasetVersion,
+    JobStatus,
+    MetricComparison,
+    PaginatedList,
+    RunHandle,
+    TestConfiguration,
+    TraceInfo,
+    TraceStats,
+    Webhook,
+    WebhookDelivery,
+)
 
 __all__ = [
-    "EvalResult",
-    "RunHandle",
-    "assert_eval",
+    "AlertHistory",
+    "AlertRule",
+    "DiscoverySession",
+    "DiscoverySuggestion",
     "EvalAssertionError",
+    "EvalResult",
+    "Experiment",
+    "ExportResult",
+    "GoldenDataset",
+    "GoldenDatasetItem",
+    "GoldenDatasetVersion",
+    "JobStatus",
+    "MetricComparison",
+    "PaginatedList",
+    "RunHandle",
+    "TestConfiguration",
+    "TraceInfo",
+    "TraceStats",
+    "Webhook",
+    "WebhookDelivery",
+    "assert_eval",
 ]

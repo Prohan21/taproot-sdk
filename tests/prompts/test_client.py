@@ -84,7 +84,7 @@ class TestPromptClientGet:
         assert isinstance(result, PromptResponse)
 
     async def test_get_sends_api_key_header(self) -> None:
-        """get() should send X-Api-Key-Id header."""
+        """get() should send X-Api-Key-Id header via shared client."""
         client = PromptClient(
             serving_url="https://prompts.taproot.dev",
             api_key="my-secret-key-id",
@@ -95,14 +95,14 @@ class TestPromptClientGet:
         with patch("taproot_sdk.prompts.client.httpx.AsyncClient") as mock_cls:
             mock_http = AsyncMock()
             mock_http.get.return_value = mock_response
-            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
-            mock_http.__aexit__ = AsyncMock(return_value=None)
+            mock_http.is_closed = False
             mock_cls.return_value = mock_http
 
             await client.get("proj", "prompt")
 
-        call_kwargs = mock_http.get.call_args[1]
-        assert call_kwargs["headers"]["X-Api-Key-Id"] == "my-secret-key-id"
+        # Header is now set on the shared httpx.AsyncClient constructor
+        constructor_kwargs = mock_cls.call_args[1]
+        assert constructor_kwargs["headers"]["X-Api-Key-Id"] == "my-secret-key-id"
 
     async def test_get_with_version_param(self) -> None:
         """get(version=5) should add ?version=5 to the request."""

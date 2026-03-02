@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from taproot_sdk.exceptions import TaprootError
 
-class MissingVariableError(Exception):
+
+class MissingVariableError(TaprootError):
     """Raised when a required template variable is not provided during rendering.
+
+    Inherits from ``TaprootError`` so ``except TaprootError`` catches all
+    SDK errors including missing variables.
 
     Attributes:
         variable_name: The name of the missing variable.

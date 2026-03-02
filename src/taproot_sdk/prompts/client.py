@@ -1,19 +1,20 @@
 """HTTP client for fetching prompts from the Taproot serving layer.
 
+.. deprecated::
+    ``PromptClient`` is deprecated. Use ``TaprootClient`` instead, which
+    provides prompt serving, management, and all other Taproot services
+    through a single unified client.
+
 The client is async-first (D22) with a synchronous convenience wrapper.
 An L1 in-memory cache with stale-while-revalidate semantics sits in
 front of every HTTP call (C2).
-
-Optional OpenTelemetry instrumentation: when ``opentelemetry-api`` is
-installed, HTTP fetches are wrapped in a ``taproot.prompt.fetch`` span
-with prompt metadata attributes.  If the library is absent, the client
-behaves identically to an uninstrumented build.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from typing import Any
 
 import httpx
@@ -75,14 +76,49 @@ class PromptClient:
         api_key: str,
         max_stale_seconds: float = 60.0,
         cache_ttl_seconds: float = 30.0,
+        timeout: float = 10.0,
     ) -> None:
+        warnings.warn(
+            "PromptClient is deprecated. Use TaprootClient instead, which "
+            "provides prompt serving, management, and all other Taproot "
+            "services through a single unified client.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._serving_url = serving_url.rstrip("/")
         self._api_key = api_key
         self._max_stale_seconds = max_stale_seconds
+        self._timeout = timeout
         self._cache = PromptCache(
             ttl_seconds=cache_ttl_seconds,
             max_stale_seconds=max_stale_seconds,
         )
+        self._http: httpx.AsyncClient | None = None
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def _get_http(self) -> httpx.AsyncClient:
+        """Return or lazily create the shared HTTP client."""
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(
+                headers={"X-Api-Key-Id": self._api_key},
+                timeout=self._timeout,
+            )
+        return self._http
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client and release resources."""
+        if self._http is not None and not self._http.is_closed:
+            await self._http.aclose()
+            self._http = None
+
+    async def __aenter__(self) -> PromptClient:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.close()
 
     # ------------------------------------------------------------------
     # Public API
@@ -258,18 +294,9 @@ class PromptClient:
         if label is not None:
             params["label"] = label
 
-        headers = {
-            "X-Api-Key-Id": self._api_key,
-        }
-
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.get(
-                url,
-                params=params,
-                headers=headers,
-                timeout=self._max_stale_seconds,
-            )
-            response.raise_for_status()
+        http_client = self._get_http()
+        response = await http_client.get(url, params=params)
+        response.raise_for_status()
 
         data: dict[str, Any] = response.json()
 

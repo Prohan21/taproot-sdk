@@ -221,3 +221,98 @@ class PromptResponse:
         """
         actual_hash = hashlib.sha256(self.content.encode("utf-8")).hexdigest()
         return hmac.compare_digest(actual_hash, self.content_hash)
+
+    # ------------------------------------------------------------------
+    # LLM provider convenience methods
+    # ------------------------------------------------------------------
+
+    def to_openai_messages(self, **variables: str) -> list[dict[str, str]]:
+        """Render and format as OpenAI chat completion messages.
+
+        For TEXT prompts, wraps the rendered content in a single
+        ``{"role": "user", "content": ...}`` message.
+
+        For CHAT prompts, renders all messages and returns them in
+        OpenAI format (``role`` + ``content``).
+
+        Args:
+            **variables: Template variables for rendering.
+
+        Returns:
+            A list of dicts compatible with ``openai.chat.completions.create(messages=...)``.
+        """
+        if self.prompt_type == PromptType.CHAT:
+            rendered = self.render_messages(**variables)
+            return [{"role": m.role, "content": m.content} for m in rendered]
+        rendered_text = self.render(**variables)
+        return [{"role": "user", "content": rendered_text}]
+
+    def to_anthropic_messages(
+        self, **variables: str
+    ) -> tuple[str | None, list[dict[str, str]]]:
+        """Render and format for Anthropic's Messages API.
+
+        Returns a ``(system_prompt, messages)`` tuple. For CHAT prompts,
+        the first ``system`` role message is extracted as the system
+        parameter; remaining messages are returned as the messages list.
+
+        For TEXT prompts, returns ``(None, [{"role": "user", "content": ...}])``.
+
+        Args:
+            **variables: Template variables for rendering.
+
+        Returns:
+            A tuple of ``(system_prompt_or_none, messages_list)``.
+        """
+        if self.prompt_type == PromptType.CHAT:
+            rendered = self.render_messages(**variables)
+            system_prompt: str | None = None
+            messages: list[dict[str, str]] = []
+            for m in rendered:
+                if m.role == "system" and system_prompt is None and not messages:
+                    system_prompt = m.content
+                else:
+                    messages.append({"role": m.role, "content": m.content})
+            return system_prompt, messages
+        rendered_text = self.render(**variables)
+        return None, [{"role": "user", "content": rendered_text}]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the prompt response to a plain dict.
+
+        Useful for logging, debugging, or passing to APIs that expect
+        raw dictionaries.
+        """
+        result: dict[str, Any] = {
+            "schema_version": self.schema_version,
+            "name": self.name,
+            "version": self.version,
+            "content": self.content,
+            "content_hash": self.content_hash,
+            "config": self.config,
+            "required_variables": list(self.required_variables),
+            "prompt_type": self.prompt_type.value,
+        }
+        if self.label is not None:
+            result["label"] = self.label
+        if self.cached_at is not None:
+            result["cached_at"] = self.cached_at
+        if self.messages is not None:
+            result["messages"] = [
+                {"role": m.role, "content": m.content, **({"name": m.name} if m.name else {})}
+                for m in self.messages
+            ]
+        if self.tools is not None:
+            result["tools"] = [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "parameters": t.parameters,
+                    "type": t.type,
+                }
+                for t in self.tools
+            ]
+        if self.ab_test:
+            result["ab_test"] = True
+            result["selected_variant"] = self.selected_variant
+        return result
