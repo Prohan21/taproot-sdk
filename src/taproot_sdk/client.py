@@ -72,6 +72,16 @@ from taproot_sdk.prompts.models import (
     PromptType,
     ToolDefinition,
 )
+from taproot_sdk.toolbox.models import (
+    CredentialInfo,
+    CredentialList,
+    ImportResult,
+    InvocationResult,
+    MCPServerInfo,
+    MCPServerList,
+    ToolInfo,
+    ToolList,
+)
 from taproot_sdk.retrieval.models import (
     AccessGranted,
     AccessList,
@@ -450,6 +460,19 @@ class TaprootClient:
         """Build project-scoped Evals-S path."""
         pid = project_id or self.project_id
         return self._evals_path(f"/projects/{pid}{suffix}")
+
+    def _toolbox_path(self, path: str) -> str:
+        """Build ToolBox-S path."""
+        if self.direct_mode:
+            return f"/v1{path}"
+        return f"/api/v1/toolbox/v1{path}"
+
+    def _project_toolbox_path(
+        self, suffix: str, project_id: str | None = None,
+    ) -> str:
+        """Build project-scoped ToolBox-S path."""
+        pid = project_id or self.project_id
+        return self._toolbox_path(f"/projects/{pid}/tools{suffix}")
 
     # ==================================================================
     # Retrieval-S — Store Management
@@ -3226,3 +3249,568 @@ class TaprootClient:
         )
         self._raise_for_status(r, service="evals")
         return JobStatus.from_api_response(r.json())
+
+    # ==================================================================
+    # ToolBox-S — Tool Management
+    # ==================================================================
+
+    async def push_tool(
+        self,
+        name: str,
+        source_code: str,
+        entry_point: str,
+        *,
+        description: str = "",
+        requirements: list[str] | None = None,
+        input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        tags: list[str] | None = None,
+        timeout_ms: int = 30000,
+        memory_mb: int = 256,
+        scope: str = "project",
+        project_id: str | None = None,
+    ) -> ToolInfo:
+        """Push a hosted Python tool to ToolBox-S.
+
+        Validates source code, auto-generates input schema from function
+        signature if not provided, and triggers async venv build for
+        tools with custom requirements.
+
+        Args:
+            name: Tool name (must be a valid Python identifier).
+            source_code: Python source code containing the tool function.
+            entry_point: Name of the function to invoke.
+            description: Human-readable description of the tool.
+            requirements: pip requirements (e.g. ``["pandas>=2.0"]``).
+            input_schema: JSON Schema for input validation. Auto-generated
+                from function signature if not provided.
+            output_schema: JSON Schema for output documentation.
+            tags: Searchable tags.
+            timeout_ms: Execution timeout in milliseconds (100–300000).
+            memory_mb: Memory limit in MB (64–2048).
+            scope: ``"project"`` or ``"global"``.
+            project_id: Override the default project_id.
+
+        Returns:
+            A :class:`ToolInfo` with the stored tool definition.
+        """
+        body: dict[str, Any] = {
+            "name": name,
+            "description": description or f"Tool {name}",
+            "source_code": source_code,
+            "entry_point": entry_point,
+            "requirements": requirements or [],
+            "tags": tags or [],
+            "timeout_ms": timeout_ms,
+            "memory_mb": memory_mb,
+            "scope": scope,
+        }
+        if input_schema is not None:
+            body["input_schema"] = input_schema
+        if output_schema is not None:
+            body["output_schema"] = output_schema
+
+        r = await self._request(
+            "POST",
+            self._project_toolbox_path("/push", project_id),
+            json=body,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
+        return ToolInfo.from_api_response(r.json())
+
+    async def register_tool(
+        self,
+        name: str,
+        endpoint_url: str,
+        *,
+        description: str = "",
+        http_method: str = "POST",
+        input_schema: dict[str, Any] | None = None,
+        output_schema: dict[str, Any] | None = None,
+        auth_type: str = "none",
+        tags: list[str] | None = None,
+        scope: str = "project",
+        project_id: str | None = None,
+    ) -> ToolInfo:
+        """Register an external HTTP tool.
+
+        Args:
+            name: Tool name.
+            endpoint_url: URL to proxy invocations to.
+            description: Human-readable description.
+            http_method: HTTP method (GET, POST, PUT, PATCH, DELETE).
+            input_schema: JSON Schema for input validation.
+            output_schema: JSON Schema for output documentation.
+            auth_type: Auth type (none, api_key, bearer, oauth2).
+            tags: Searchable tags.
+            scope: ``"project"`` or ``"global"``.
+            project_id: Override the default project_id.
+
+        Returns:
+            A :class:`ToolInfo` with the registered tool definition.
+        """
+        body: dict[str, Any] = {
+            "name": name,
+            "description": description or f"External tool {name}",
+            "endpoint_url": endpoint_url,
+            "http_method": http_method,
+            "input_schema": input_schema or {"type": "object"},
+            "auth_type": auth_type,
+            "tags": tags or [],
+            "scope": scope,
+        }
+        if output_schema is not None:
+            body["output_schema"] = output_schema
+
+        r = await self._request(
+            "POST",
+            self._project_toolbox_path("/register", project_id),
+            json=body,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
+        return ToolInfo.from_api_response(r.json())
+
+    async def invoke_tool(
+        self,
+        tool_name: str,
+        input_data: dict[str, Any] | None = None,
+        *,
+        version: int | None = None,
+        project_id: str | None = None,
+    ) -> InvocationResult:
+        """Invoke a tool by name.
+
+        Routes to the correct executor (subprocess for hosted, HTTP proxy
+        for external) based on the tool's type.
+
+        Args:
+            tool_name: Name of the tool to invoke.
+            input_data: Input arguments as a dict.
+            version: Specific version to invoke (latest if not specified).
+            project_id: Override the default project_id.
+
+        Returns:
+            An :class:`InvocationResult` with success/error and the result.
+        """
+        pid = project_id or self.project_id
+        body: dict[str, Any] = {
+            "input": input_data or {},
+        }
+        if version is not None:
+            body["version"] = version
+
+        r = await self._request(
+            "POST",
+            self._toolbox_path(f"/projects/{pid}/invoke/{tool_name}"),
+            json=body,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return InvocationResult.from_api_response(r.json())
+
+    async def list_tools(
+        self,
+        *,
+        tags: list[str] | None = None,
+        tool_type: str | None = None,
+        scope: str | None = None,
+        status: str | None = None,
+        include_global: bool = True,
+        project_id: str | None = None,
+    ) -> ToolList:
+        """List tools available to a project.
+
+        Args:
+            tags: Filter by tags (comma-joined).
+            tool_type: Filter by type (hosted, external, mcp).
+            scope: Filter by scope (project, global).
+            status: Filter by status (active, building, build_failed, etc.).
+            include_global: Include global-scoped tools (default True).
+            project_id: Override the default project_id.
+
+        Returns:
+            A :class:`ToolList` with matching tools.
+        """
+        params: dict[str, Any] = {"include_global": include_global}
+        if tags:
+            params["tags"] = ",".join(tags)
+        if tool_type:
+            params["tool_type"] = tool_type
+        if scope:
+            params["scope"] = scope
+        if status:
+            params["status"] = status
+
+        r = await self._request(
+            "GET",
+            self._project_toolbox_path("", project_id),
+            params=params,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
+        return ToolList.from_api_response(r.json())
+
+    async def get_tool(
+        self,
+        tool_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> ToolInfo:
+        """Get a tool by ID.
+
+        Args:
+            tool_id: The tool UUID.
+            project_id: Override the default project_id.
+
+        Returns:
+            A :class:`ToolInfo` with the tool definition.
+        """
+        r = await self._request(
+            "GET",
+            self._project_toolbox_path(f"/{tool_id}", project_id),
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
+        return ToolInfo.from_api_response(r.json())
+
+    async def update_tool(
+        self,
+        tool_id: str,
+        *,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        timeout_ms: int | None = None,
+        memory_mb: int | None = None,
+        scope: str | None = None,
+        status: str | None = None,
+        project_id: str | None = None,
+    ) -> ToolInfo:
+        """Update tool metadata (non-code fields).
+
+        Args:
+            tool_id: The tool UUID.
+            description: New description.
+            tags: New tags list.
+            timeout_ms: New timeout.
+            memory_mb: New memory limit.
+            scope: New scope (project/global).
+            status: New status (active/deprecated/disabled).
+            project_id: Override the default project_id.
+
+        Returns:
+            A :class:`ToolInfo` with the updated tool.
+        """
+        body: dict[str, Any] = {}
+        if description is not None:
+            body["description"] = description
+        if tags is not None:
+            body["tags"] = tags
+        if timeout_ms is not None:
+            body["timeout_ms"] = timeout_ms
+        if memory_mb is not None:
+            body["memory_mb"] = memory_mb
+        if scope is not None:
+            body["scope"] = scope
+        if status is not None:
+            body["status"] = status
+
+        r = await self._request(
+            "PUT",
+            self._project_toolbox_path(f"/{tool_id}", project_id),
+            json=body,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
+        return ToolInfo.from_api_response(r.json())
+
+    async def delete_tool(
+        self,
+        tool_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> None:
+        """Soft-delete a tool.
+
+        Args:
+            tool_id: The tool UUID.
+            project_id: Override the default project_id.
+        """
+        r = await self._request(
+            "DELETE",
+            self._project_toolbox_path(f"/{tool_id}", project_id),
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
+
+    async def import_openapi(
+        self,
+        namespace: str,
+        *,
+        spec_url: str | None = None,
+        spec_body: dict[str, Any] | None = None,
+        base_url: str | None = None,
+        tags: list[str] | None = None,
+        auth_type: str = "none",
+        scope: str = "project",
+        project_id: str | None = None,
+    ) -> ImportResult:
+        """Import tools from an OpenAPI spec.
+
+        Provide either *spec_url* (to fetch remotely) or *spec_body*
+        (inline JSON).  Each endpoint in the spec becomes an external
+        tool with the given *namespace* prefix.
+
+        Args:
+            namespace: Prefix for tool names (e.g. ``"stripe"``).
+            spec_url: URL to fetch the OpenAPI spec from.
+            spec_body: Inline OpenAPI spec as a dict.
+            base_url: Override the base URL for endpoints.
+            tags: Tags to apply to imported tools.
+            auth_type: Auth type (none, api_key, bearer, oauth2).
+            scope: ``"project"`` or ``"global"``.
+            project_id: Override the default project_id.
+
+        Returns:
+            An :class:`ImportResult` with created tools and counts.
+        """
+        body: dict[str, Any] = {
+            "namespace": namespace,
+            "auth_type": auth_type,
+            "scope": scope,
+        }
+        if spec_url is not None:
+            body["spec_url"] = spec_url
+        if spec_body is not None:
+            body["spec_body"] = spec_body
+        if base_url is not None:
+            body["base_url"] = base_url
+        if tags is not None:
+            body["tags"] = tags
+
+        r = await self._request(
+            "POST",
+            self._project_toolbox_path("/import-openapi", project_id),
+            json=body,
+            service="toolbox",
+        )
+        self._raise_for_status(
+            r, service="toolbox", project_id=project_id or self.project_id,
+        )
+        return ImportResult.from_api_response(r.json())
+
+    # ==================================================================
+    # ToolBox-S — Credentials
+    # ==================================================================
+
+    async def set_tool_credential(
+        self,
+        tool_definition_id: str,
+        credential_type: str,
+        name: str,
+        credential_payload: dict[str, Any],
+        *,
+        expires_at: str | None = None,
+        project_id: str | None = None,
+    ) -> CredentialInfo:
+        """Store an encrypted credential for a tool.
+
+        Args:
+            tool_definition_id: The tool definition UUID this credential belongs to.
+            credential_type: Credential type (e.g. ``api_key``, ``oauth2``).
+            name: Human-readable credential name.
+            credential_payload: Secret key-value pairs (encrypted server-side).
+            expires_at: Optional ISO-8601 expiration timestamp.
+            project_id: Override the default project_id.
+        """
+        pid = project_id or self.project_id
+        body: dict[str, Any] = {
+            "tool_definition_id": tool_definition_id,
+            "credential_type": credential_type,
+            "name": name,
+            "credential_payload": credential_payload,
+        }
+        if expires_at is not None:
+            body["expires_at"] = expires_at
+
+        r = await self._request(
+            "POST",
+            self._toolbox_path(f"/projects/{pid}/credentials"),
+            json=body,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return CredentialInfo.from_api_response(r.json())
+
+    async def list_credentials(
+        self,
+        *,
+        tool_definition_id: str | None = None,
+        project_id: str | None = None,
+    ) -> CredentialList:
+        """List credentials for the current project.
+
+        Args:
+            tool_definition_id: Optional filter by tool definition.
+            project_id: Override the default project_id.
+        """
+        pid = project_id or self.project_id
+        params: dict[str, Any] = {}
+        if tool_definition_id:
+            params["tool_definition_id"] = tool_definition_id
+
+        r = await self._request(
+            "GET",
+            self._toolbox_path(f"/projects/{pid}/credentials"),
+            params=params,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return CredentialList.from_api_response(r.json())
+
+    async def revoke_credential(
+        self,
+        credential_id: str,
+        version: int,
+        *,
+        project_id: str | None = None,
+    ) -> CredentialInfo:
+        """Revoke a credential.
+
+        Args:
+            credential_id: The credential UUID.
+            version: Optimistic concurrency version.
+            project_id: Override the default project_id.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "POST",
+            self._toolbox_path(f"/projects/{pid}/credentials/{credential_id}/revoke"),
+            json={"version": version},
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return CredentialInfo.from_api_response(r.json())
+
+    # ==================================================================
+    # ToolBox-S — MCP Servers
+    # ==================================================================
+
+    async def register_mcp_server(
+        self,
+        name: str,
+        transport_type: str,
+        url: str,
+        *,
+        description: str = "",
+        tags: list[str] | None = None,
+        scope: str = "project",
+        project_id: str | None = None,
+    ) -> MCPServerInfo:
+        """Register an MCP server.
+
+        Args:
+            name: Server name.
+            transport_type: Transport type (e.g. ``sse``, ``stdio``).
+            url: Server URL or connection string.
+            description: Optional description.
+            tags: Optional tags.
+            scope: Visibility scope (default ``project``).
+            project_id: Override the default project_id.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "POST",
+            self._toolbox_path(f"/projects/{pid}/mcp-servers"),
+            json={
+                "name": name,
+                "description": description,
+                "transport_type": transport_type,
+                "url": url,
+                "tags": tags or [],
+                "scope": scope,
+            },
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return MCPServerInfo.from_api_response(r.json())
+
+    async def list_mcp_servers(
+        self,
+        *,
+        status: str | None = None,
+        tags: list[str] | None = None,
+        project_id: str | None = None,
+    ) -> MCPServerList:
+        """List MCP servers.
+
+        Args:
+            status: Optional filter by health status.
+            tags: Optional filter by tags.
+            project_id: Override the default project_id.
+        """
+        pid = project_id or self.project_id
+        params: dict[str, Any] = {}
+        if status:
+            params["status"] = status
+        if tags:
+            params["tags"] = ",".join(tags)
+
+        r = await self._request(
+            "GET",
+            self._toolbox_path(f"/projects/{pid}/mcp-servers"),
+            params=params,
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return MCPServerList.from_api_response(r.json())
+
+    async def get_mcp_server(
+        self,
+        server_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> MCPServerInfo:
+        """Get MCP server by ID.
+
+        Args:
+            server_id: The MCP server UUID.
+            project_id: Override the default project_id.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "GET",
+            self._toolbox_path(f"/projects/{pid}/mcp-servers/{server_id}"),
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return MCPServerInfo.from_api_response(r.json())
+
+    async def delete_mcp_server(
+        self,
+        server_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> None:
+        """Delete (soft) an MCP server.
+
+        Args:
+            server_id: The MCP server UUID.
+            project_id: Override the default project_id.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "DELETE",
+            self._toolbox_path(f"/projects/{pid}/mcp-servers/{server_id}"),
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+
+    async def health_toolbox(self) -> dict[str, Any]:
+        """Check ToolBox-S service health."""
+        r = await self._request(
+            "GET", self._toolbox_path("/health"), service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox")
+        return r.json()

@@ -59,6 +59,16 @@ from taproot_sdk.guardrails import (
     ScannerSignal,
 )
 from taproot_sdk.prompts import MissingVariableError, PromptResponse
+from taproot_sdk.toolbox import (
+    CredentialInfo,
+    CredentialList,
+    ImportResult,
+    InvocationResult,
+    MCPServerInfo,
+    MCPServerList,
+    ToolInfo,
+    ToolList,
+)
 from taproot_sdk.retrieval import (
     AccessGrant,
     AccessGranted,
@@ -163,6 +173,15 @@ __all__ = [
     "ChunkList",
     "ChunksUploaded",
     "ChunksDeleted",
+    # ToolBox
+    "CredentialInfo",
+    "CredentialList",
+    "ImportResult",
+    "InvocationResult",
+    "MCPServerInfo",
+    "MCPServerList",
+    "ToolInfo",
+    "ToolList",
     # Version
     "__version__",
 ]

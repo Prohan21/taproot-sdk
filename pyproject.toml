@@ -64,6 +64,9 @@ dev = [
     "httpx>=0.25.0",
 ]
 
+[project.scripts]
+taproot-tools = "taproot_sdk.toolbox.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/taproot-ai/taproot-sdk"
 Documentation = "https://docs.taproot.dev/sdk"
