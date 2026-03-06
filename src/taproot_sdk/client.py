@@ -77,10 +77,14 @@ from taproot_sdk.toolbox.models import (
     CredentialList,
     ImportResult,
     InvocationResult,
+    MCPRegistryImportResult,
     MCPServerInfo,
     MCPServerList,
+    OAuthConnectionInfo,
+    OAuthFlowResponse,
     ToolInfo,
     ToolList,
+    UsageReport,
 )
 from taproot_sdk.retrieval.models import (
     AccessGranted,
@@ -172,6 +176,9 @@ class TaprootClient:
             ttl_seconds=cache_ttl_seconds,
             max_stale_seconds=max_stale_seconds,
         )
+
+        # Functions decorated with @client.tool(), awaiting push
+        self._decorated_tools: list[Any] = []
 
     async def close(self) -> None:
         await self._http.aclose()
@@ -3385,6 +3392,9 @@ class TaprootClient:
         Routes to the correct executor (subprocess for hosted, HTTP proxy
         for external) based on the tool's type.
 
+        If OpenTelemetry tracing is active, records ``toolbox.*`` span
+        attributes for downstream evaluation by Evals-S.
+
         Args:
             tool_name: Name of the tool to invoke.
             input_data: Input arguments as a dict.
@@ -3401,6 +3411,8 @@ class TaprootClient:
         if version is not None:
             body["version"] = version
 
+        start_ms = time.monotonic() * 1000
+
         r = await self._request(
             "POST",
             self._toolbox_path(f"/projects/{pid}/invoke/{tool_name}"),
@@ -3408,7 +3420,24 @@ class TaprootClient:
             service="toolbox",
         )
         self._raise_for_status(r, service="toolbox", project_id=pid)
-        return InvocationResult.from_api_response(r.json())
+        result = InvocationResult.from_api_response(r.json())
+
+        duration_ms = round(time.monotonic() * 1000 - start_ms, 2)
+
+        # Record span attributes for Evals-S tool_usage_quality evaluator
+        try:
+            from opentelemetry import trace as _ot_trace
+
+            span = _ot_trace.get_current_span()
+            if span and span.is_recording():
+                span.set_attribute("toolbox.tool.name", tool_name)
+                span.set_attribute("toolbox.tool.id", result.invocation_id)
+                span.set_attribute("toolbox.invocation.success", result.success)
+                span.set_attribute("toolbox.invocation.duration_ms", duration_ms)
+        except ImportError:
+            pass
+
+        return result
 
     async def list_tools(
         self,
@@ -3451,6 +3480,60 @@ class TaprootClient:
         )
         self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
         return ToolList.from_api_response(r.json())
+
+    async def discover_tools(
+        self,
+        query: str,
+        *,
+        top_k: int = 10,
+        project_id: str | None = None,
+    ) -> ToolList:
+        """Semantic search for tools using natural language.
+
+        Queries the ToolBox-S semantic search endpoint backed by Retrieval-S
+        vector search. Requires ``semantic_search_enabled=true`` on the server.
+
+        Args:
+            query: Natural language search query (e.g. "tools for math operations").
+            top_k: Maximum number of results (1-100, default 10).
+            project_id: Override the default project_id.
+
+        Returns:
+            A :class:`ToolList` with matching tools ranked by relevance.
+        """
+        r = await self._request(
+            "POST",
+            self._project_toolbox_path("/search", project_id),
+            json={"query": query, "top_k": top_k},
+            service="toolbox",
+        )
+        self._raise_for_status(
+            r, service="toolbox", project_id=project_id or self.project_id,
+        )
+        return ToolList.from_api_response(r.json())
+
+    async def get_usage_report(
+        self,
+        *,
+        project_id: str | None = None,
+    ) -> UsageReport:
+        """Get tool usage report for a project.
+
+        Returns aggregate invocation statistics for all tools.
+
+        Args:
+            project_id: Override the default project_id.
+
+        Returns:
+            A :class:`UsageReport` with per-tool stats.
+        """
+        r = await self._request(
+            "POST",
+            self._project_toolbox_path("/usage-report", project_id),
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=project_id or self.project_id)
+        return UsageReport.from_api_response(r.json())
 
     async def get_tool(
         self,
@@ -3600,6 +3683,84 @@ class TaprootClient:
         )
         return ImportResult.from_api_response(r.json())
 
+    async def import_mcp_registry(
+        self,
+        *,
+        registry_url: str | None = None,
+        registry_body: dict[str, Any] | None = None,
+        namespace: str | None = None,
+        tags: list[str] | None = None,
+        scope: str = "project",
+        project_id: str | None = None,
+    ) -> MCPRegistryImportResult:
+        """Import MCP servers and tools from an MCP registry JSON.
+
+        Provide either *registry_url* (to fetch remotely) or *registry_body*
+        (inline JSON). Each server in the registry becomes an MCP server
+        record and each tool becomes a tool definition with type ``mcp``.
+
+        Args:
+            registry_url: URL to fetch the MCP registry JSON from.
+            registry_body: Inline MCP registry as a dict.
+            namespace: Optional prefix for tool names.
+            tags: Tags to apply to imported entries.
+            scope: ``"project"`` or ``"global"``.
+            project_id: Override the default project_id.
+
+        Returns:
+            An :class:`MCPRegistryImportResult` with created servers/tools and counts.
+        """
+        body: dict[str, Any] = {"scope": scope}
+        if registry_url is not None:
+            body["registry_url"] = registry_url
+        if registry_body is not None:
+            body["registry_body"] = registry_body
+        if namespace is not None:
+            body["namespace"] = namespace
+        if tags is not None:
+            body["tags"] = tags
+
+        r = await self._request(
+            "POST",
+            self._project_toolbox_path("/import-mcp-registry", project_id),
+            json=body,
+            service="toolbox",
+        )
+        self._raise_for_status(
+            r, service="toolbox", project_id=project_id or self.project_id,
+        )
+        return MCPRegistryImportResult.from_api_response(r.json())
+
+    async def export_mcp_registry(
+        self,
+        *,
+        include_global: bool = True,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Export MCP servers and tools in MCP registry-compatible JSON format.
+
+        Args:
+            include_global: Whether to include global-scoped tools.
+            project_id: Override the default project_id.
+
+        Returns:
+            Dict with ``servers`` key matching the MCP registry JSON format.
+        """
+        params: dict[str, Any] = {}
+        if not include_global:
+            params["include_global"] = "false"
+
+        r = await self._request(
+            "GET",
+            self._project_toolbox_path("/export-mcp-registry", project_id),
+            params=params,
+            service="toolbox",
+        )
+        self._raise_for_status(
+            r, service="toolbox", project_id=project_id or self.project_id,
+        )
+        return r.json()
+
     # ==================================================================
     # ToolBox-S — Credentials
     # ==================================================================
@@ -3692,6 +3853,142 @@ class TaprootClient:
         )
         self._raise_for_status(r, service="toolbox", project_id=pid)
         return CredentialInfo.from_api_response(r.json())
+
+    # ==================================================================
+    # ToolBox-S — OAuth Flows
+    # ==================================================================
+
+    async def start_oauth_flow(
+        self,
+        tool_definition_id: str,
+        provider_url: str,
+        token_url: str,
+        client_id: str,
+        redirect_uri: str,
+        *,
+        scopes: list[str] | None = None,
+        project_id: str | None = None,
+    ) -> OAuthFlowResponse:
+        """Start an OAuth authorization code flow.
+
+        Args:
+            tool_definition_id: The tool definition that requires OAuth.
+            provider_url: OAuth authorization endpoint URL.
+            token_url: OAuth token endpoint URL.
+            client_id: OAuth client ID.
+            redirect_uri: Callback URL registered with the provider.
+            scopes: Requested OAuth scopes.
+            project_id: Override the default project_id.
+
+        Returns:
+            OAuthFlowResponse with ``authorize_url`` and ``state``.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "POST",
+            self._toolbox_path(f"/projects/{pid}/oauth/authorize"),
+            json={
+                "provider_url": provider_url,
+                "token_url": token_url,
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "scopes": scopes or [],
+                "tool_definition_id": tool_definition_id,
+            },
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return OAuthFlowResponse.from_api_response(r.json())
+
+    async def complete_oauth_flow(
+        self,
+        tool_definition_id: str,
+        code: str,
+        state: str,
+        token_url: str,
+        client_id: str,
+        client_secret: str,
+        redirect_uri: str,
+        user_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> OAuthConnectionInfo:
+        """Complete an OAuth authorization code flow (callback).
+
+        Args:
+            tool_definition_id: The tool definition that requires OAuth.
+            code: Authorization code from the OAuth provider.
+            state: CSRF state token from the initiation response.
+            token_url: OAuth token endpoint URL.
+            client_id: OAuth client ID.
+            client_secret: OAuth client secret.
+            redirect_uri: Must match the redirect_uri used during authorization.
+            user_id: The end-user who authorized the connection.
+            project_id: Override the default project_id.
+
+        Returns:
+            OAuthConnectionInfo with the stored connection metadata.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "POST",
+            self._toolbox_path(f"/projects/{pid}/oauth/callback"),
+            json={
+                "code": code,
+                "state": state,
+                "token_url": token_url,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "tool_definition_id": tool_definition_id,
+                "user_id": user_id,
+            },
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return OAuthConnectionInfo.from_api_response(r.json())
+
+    async def client_credentials_grant(
+        self,
+        tool_definition_id: str,
+        token_url: str,
+        client_id: str,
+        client_secret: str,
+        *,
+        scopes: list[str] | None = None,
+        user_id: str = "service",
+        project_id: str | None = None,
+    ) -> OAuthConnectionInfo:
+        """Execute a client credentials grant and store the tokens.
+
+        Args:
+            tool_definition_id: The tool definition that requires OAuth.
+            token_url: OAuth token endpoint URL.
+            client_id: OAuth client ID.
+            client_secret: OAuth client secret.
+            scopes: Requested OAuth scopes.
+            user_id: Identifier for this client credentials grant.
+            project_id: Override the default project_id.
+
+        Returns:
+            OAuthConnectionInfo with the stored connection metadata.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "POST",
+            self._toolbox_path(f"/projects/{pid}/oauth/client-credentials"),
+            json={
+                "token_url": token_url,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "scopes": scopes or [],
+                "tool_definition_id": tool_definition_id,
+                "user_id": user_id,
+            },
+            service="toolbox",
+        )
+        self._raise_for_status(r, service="toolbox", project_id=pid)
+        return OAuthConnectionInfo.from_api_response(r.json())
 
     # ==================================================================
     # ToolBox-S — MCP Servers
@@ -3814,3 +4111,71 @@ class TaprootClient:
         )
         self._raise_for_status(r, service="toolbox")
         return r.json()
+
+    # ==================================================================
+    # ToolBox-S — @client.tool() decorator
+    # ==================================================================
+
+    def tool(
+        self,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+        requirements: list[str] | None = None,
+    ) -> Any:
+        """Decorator marking a function for push_tool.
+
+        Captures the function's source code and metadata at decoration time.
+        Call :meth:`push_decorated_tools` to push all decorated functions.
+
+        Usage::
+
+            @client.tool(name="my_tool", description="Does something")
+            def my_func(x: int, y: int) -> dict:
+                return {"sum": x + y}
+
+            # Later, push all decorated tools:
+            results = await client.push_decorated_tools(project_id="proj-1")
+        """
+        import inspect as _inspect
+
+        def decorator(func: Any) -> Any:
+            tool_name = name or func.__name__
+            tool_desc = description or (func.__doc__ or "").strip()
+            func._toolbox_metadata = {
+                "name": tool_name,
+                "description": tool_desc or f"Tool: {tool_name}",
+                "source_code": _inspect.getsource(func),
+                "entry_point": func.__name__,
+                "tags": tags or [],
+                "requirements": requirements or [],
+            }
+            self._decorated_tools.append(func)
+            return func
+
+        return decorator
+
+    async def push_decorated_tools(self, project_id: str | None = None) -> list[ToolInfo]:
+        """Push all functions decorated with :meth:`tool`.
+
+        Args:
+            project_id: Target project. Falls back to ``self.project_id``.
+
+        Returns:
+            A list of :class:`ToolInfo` for each pushed tool.
+        """
+        results: list[ToolInfo] = []
+        for func in self._decorated_tools:
+            meta: dict[str, Any] = func._toolbox_metadata
+            result = await self.push_tool(
+                name=meta["name"],
+                source_code=meta["source_code"],
+                entry_point=meta["entry_point"],
+                description=meta["description"],
+                tags=meta["tags"],
+                requirements=meta["requirements"],
+                project_id=project_id,
+            )
+            results.append(result)
+        return results

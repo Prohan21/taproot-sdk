@@ -15,6 +15,7 @@ from taproot_sdk.toolbox.models import (
     CredentialList,
     ImportResult,
     InvocationResult,
+    MCPRegistryImportResult,
     MCPServerInfo,
     MCPServerList,
     ToolInfo,
@@ -798,3 +799,292 @@ class TestSetCredentialWithExpiry:
         # Verify expires_at was sent in the request body
         sent_body = route.calls[0].request.content
         assert b"expires_at" in sent_body
+
+
+class TestDiscoverTools:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_discover_returns_typed(self):
+        resp = {
+            "tools": [_TOOL_RESPONSE],
+            "project_id": "proj-1",
+            "query": "math addition",
+            "count": 1,
+        }
+        route = respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/search"
+        ).mock(return_value=_json_resp(resp))
+
+        async with _client() as c:
+            result = await c.discover_tools("math addition")
+
+        assert isinstance(result, ToolList)
+        assert result.count == 1
+        assert result.tools[0].name == "add"
+        # Verify POST body
+        import json
+        sent_body = json.loads(route.calls[0].request.content)
+        assert sent_body["query"] == "math addition"
+        assert sent_body["top_k"] == 10
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_discover_with_top_k(self):
+        resp = {"tools": [], "project_id": "proj-1", "query": "test", "count": 0}
+        route = respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/search"
+        ).mock(return_value=_json_resp(resp))
+
+        async with _client() as c:
+            result = await c.discover_tools("test", top_k=5)
+
+        assert result.count == 0
+        import json
+        sent_body = json.loads(route.calls[0].request.content)
+        assert sent_body["top_k"] == 5
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_discover_with_project_override(self):
+        resp = {"tools": [], "project_id": "other-proj", "query": "q", "count": 0}
+        respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/other-proj/tools/search"
+        ).mock(return_value=_json_resp(resp))
+
+        async with _client() as c:
+            result = await c.discover_tools("q", project_id="other-proj")
+
+        assert result.project_id == "other-proj"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_discover_direct_mode_path(self):
+        resp = {"tools": [], "project_id": "proj-1", "query": "q", "count": 0}
+        respx.post(f"{BASE}/v1/projects/proj-1/tools/search").mock(
+            return_value=_json_resp(resp)
+        )
+
+        c = TaprootClient(
+            base_url=BASE, api_key="key-id", project_id="proj-1", direct_mode=True,
+        )
+        async with c:
+            result = await c.discover_tools("q")
+
+        assert result.count == 0
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_discover_server_error(self):
+        respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/search"
+        ).mock(return_value=httpx.Response(500, json={"error": "Internal"}))
+
+        async with _client() as c:
+            with pytest.raises(TaprootAPIError) as exc_info:
+                await c.discover_tools("query")
+            assert exc_info.value.status_code == 500
+
+
+# ── MCP Registry Import/Export ────────────────────────────────────────
+
+_MCP_REGISTRY_IMPORT_RESPONSE = {
+    "servers_created": [_MCP_SERVER_RESPONSE],
+    "tools_created": [_TOOL_RESPONSE],
+    "total_servers_parsed": 1,
+    "total_tools_parsed": 1,
+    "servers_skipped": 0,
+    "tools_skipped": 0,
+}
+
+_SAMPLE_REGISTRY = {
+    "servers": [
+        {
+            "name": "test-server",
+            "description": "A test server",
+            "url": "https://test.example.com/mcp",
+            "transport": "streamable_http",
+            "categories": ["test"],
+            "tools": [
+                {
+                    "name": "test_tool",
+                    "description": "A test tool",
+                    "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}},
+                }
+            ],
+        }
+    ]
+}
+
+
+class TestImportMCPRegistry:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_import_with_registry_body(self):
+        respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/import-mcp-registry"
+        ).mock(return_value=_json_resp(_MCP_REGISTRY_IMPORT_RESPONSE, 201))
+
+        async with _client() as c:
+            result = await c.import_mcp_registry(registry_body=_SAMPLE_REGISTRY)
+
+        assert isinstance(result, MCPRegistryImportResult)
+        assert len(result.servers_created) == 1
+        assert len(result.tools_created) == 1
+        assert result.total_servers_parsed == 1
+        assert result.total_tools_parsed == 1
+        assert result.servers_skipped == 0
+        assert result.tools_skipped == 0
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_import_with_registry_url(self):
+        respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/import-mcp-registry"
+        ).mock(return_value=_json_resp(_MCP_REGISTRY_IMPORT_RESPONSE, 201))
+
+        async with _client() as c:
+            result = await c.import_mcp_registry(
+                registry_url="https://registry.example.com/mcp.json"
+            )
+
+        assert isinstance(result, MCPRegistryImportResult)
+        assert result.total_servers_parsed == 1
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_import_with_all_options(self):
+        resp = {
+            "servers_created": [],
+            "tools_created": [],
+            "total_servers_parsed": 2,
+            "total_tools_parsed": 5,
+            "servers_skipped": 2,
+            "tools_skipped": 5,
+        }
+        route = respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/import-mcp-registry"
+        ).mock(return_value=_json_resp(resp, 201))
+
+        async with _client() as c:
+            result = await c.import_mcp_registry(
+                registry_body=_SAMPLE_REGISTRY,
+                namespace="acme",
+                tags=["imported"],
+                scope="global",
+            )
+
+        assert result.servers_skipped == 2
+        assert result.tools_skipped == 5
+        assert route.called
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_import_direct_mode_path(self):
+        resp = {
+            "servers_created": [],
+            "tools_created": [],
+            "total_servers_parsed": 0,
+            "total_tools_parsed": 0,
+            "servers_skipped": 0,
+            "tools_skipped": 0,
+        }
+        respx.post(f"{BASE}/v1/projects/proj-1/tools/import-mcp-registry").mock(
+            return_value=_json_resp(resp, 201)
+        )
+
+        c = TaprootClient(
+            base_url=BASE, api_key="key-id", project_id="proj-1", direct_mode=True,
+        )
+        async with c:
+            result = await c.import_mcp_registry(
+                registry_url="https://registry.example.com/mcp.json"
+            )
+
+        assert result.total_servers_parsed == 0
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_import_validation_error(self):
+        respx.post(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/import-mcp-registry"
+        ).mock(
+            return_value=httpx.Response(422, json={"detail": "Invalid registry"})
+        )
+
+        async with _client() as c:
+            with pytest.raises(ValidationError):
+                await c.import_mcp_registry(registry_body={})
+
+
+class TestExportMCPRegistry:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_export_returns_dict(self):
+        exported = {
+            "servers": [
+                {
+                    "name": "test-server",
+                    "description": "desc",
+                    "url": "https://test.com/mcp",
+                    "transport": "streamable_http",
+                    "categories": [],
+                    "tools": [
+                        {
+                            "name": "tool1",
+                            "description": "desc",
+                            "inputSchema": {"type": "object"},
+                        }
+                    ],
+                }
+            ]
+        }
+        respx.get(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/export-mcp-registry"
+        ).mock(return_value=_json_resp(exported))
+
+        async with _client() as c:
+            result = await c.export_mcp_registry()
+
+        assert isinstance(result, dict)
+        assert "servers" in result
+        assert len(result["servers"]) == 1
+        assert result["servers"][0]["name"] == "test-server"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_export_empty_project(self):
+        respx.get(
+            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/export-mcp-registry"
+        ).mock(return_value=_json_resp({"servers": []}))
+
+        async with _client() as c:
+            result = await c.export_mcp_registry()
+
+        assert result == {"servers": []}
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_export_direct_mode_path(self):
+        respx.get(f"{BASE}/v1/projects/proj-1/tools/export-mcp-registry").mock(
+            return_value=_json_resp({"servers": []})
+        )
+
+        c = TaprootClient(
+            base_url=BASE, api_key="key-id", project_id="proj-1", direct_mode=True,
+        )
+        async with c:
+            result = await c.export_mcp_registry()
+
+        assert result == {"servers": []}
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_export_with_project_override(self):
+        respx.get(
+            f"{BASE}/api/v1/toolbox/v1/projects/other-proj/tools/export-mcp-registry"
+        ).mock(return_value=_json_resp({"servers": []}))
+
+        async with _client() as c:
+            result = await c.export_mcp_registry(project_id="other-proj")
+
+        assert result == {"servers": []}

@@ -5,8 +5,11 @@ from taproot_sdk.toolbox.models import (
     CredentialList,
     ImportResult,
     InvocationResult,
+    MCPRegistryImportResult,
     MCPServerInfo,
     MCPServerList,
+    OAuthConnectionInfo,
+    OAuthFlowResponse,
     ToolInfo,
     ToolList,
 )
@@ -16,8 +19,11 @@ __all__ = [
     "CredentialList",
     "ImportResult",
     "InvocationResult",
+    "MCPRegistryImportResult",
     "MCPServerInfo",
     "MCPServerList",
+    "OAuthConnectionInfo",
+    "OAuthFlowResponse",
     "ToolInfo",
     "ToolList",
 ]

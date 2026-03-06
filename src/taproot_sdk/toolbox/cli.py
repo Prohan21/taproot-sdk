@@ -239,6 +239,15 @@ def _cmd_invoke(args: argparse.Namespace) -> None:
     _print_invocation(result, as_json=args.json)
 
 
+def _cmd_search(args: argparse.Namespace) -> None:
+    """Semantic search for tools using natural language."""
+    client = _make_client()
+    tool_list = asyncio.run(
+        client.discover_tools(args.query, top_k=args.top_k)
+    )
+    _print_tool_table(tool_list, as_json=args.json)
+
+
 def _cmd_list(args: argparse.Namespace) -> None:
     """List tools."""
     client = _make_client()
@@ -466,6 +475,88 @@ def _cmd_import_openapi(args: argparse.Namespace) -> None:
                 print(f"  - {tool.name}: {desc}")
 
 
+def _cmd_import_mcp_registry(args: argparse.Namespace) -> None:
+    """Import MCP servers and tools from an MCP registry JSON."""
+    registry_body = None
+    if args.registry_file:
+        try:
+            with open(args.registry_file, encoding="utf-8") as fh:
+                registry_body = json.loads(fh.read())
+        except FileNotFoundError:
+            _die(f"File not found: {args.registry_file}")
+        except json.JSONDecodeError as exc:
+            _die(f"Invalid JSON in {args.registry_file}: {exc}")
+        except OSError as exc:
+            _die(f"Cannot read file {args.registry_file}: {exc}")
+
+    if not args.registry_url and registry_body is None:
+        _die("Specify --registry-url or --registry-file.")
+
+    client = _make_client()
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
+        if args.tags else None
+
+    result = asyncio.run(
+        client.import_mcp_registry(
+            registry_url=args.registry_url,
+            registry_body=registry_body,
+            namespace=args.namespace,
+            tags=tags,
+            scope=args.scope,
+        )
+    )
+
+    if args.json:
+        _print_json({
+            "servers_created": len(result.servers_created),
+            "tools_created": len(result.tools_created),
+            "total_servers_parsed": result.total_servers_parsed,
+            "total_tools_parsed": result.total_tools_parsed,
+            "servers_skipped": result.servers_skipped,
+            "tools_skipped": result.tools_skipped,
+            "server_names": [s.name for s in result.servers_created],
+            "tool_names": [t.name for t in result.tools_created],
+        })
+    else:
+        print(
+            f"Imported {len(result.servers_created)} servers, "
+            f"{len(result.tools_created)} tools"
+        )
+        print(f"  Servers skipped: {result.servers_skipped} (already exist)")
+        print(f"  Tools skipped: {result.tools_skipped} (already exist)")
+        print(f"  Total servers parsed: {result.total_servers_parsed}")
+        print(f"  Total tools parsed: {result.total_tools_parsed}")
+        if result.servers_created:
+            print("\nCreated servers:")
+            for srv in result.servers_created:
+                print(f"  - {srv.name}: {srv.url}")
+        if result.tools_created:
+            print("\nCreated tools:")
+            for tool in result.tools_created:
+                desc = tool.description[:60] + "..." \
+                    if len(tool.description) > 60 else tool.description
+                print(f"  - {tool.name}: {desc}")
+
+
+def _cmd_export_mcp_registry(args: argparse.Namespace) -> None:
+    """Export MCP servers and tools in MCP registry-compatible JSON format."""
+    client = _make_client()
+    result = asyncio.run(
+        client.export_mcp_registry(include_global=not args.no_global)
+    )
+
+    if args.output:
+        try:
+            with open(args.output, "w", encoding="utf-8") as fh:
+                json.dump(result, fh, indent=2, default=str)
+            if not args.json:
+                print(f"Exported to {args.output}")
+        except OSError as exc:
+            _die(f"Cannot write file {args.output}: {exc}")
+    else:
+        _print_json(result)
+
+
 def _cmd_set_credential(args: argparse.Namespace) -> None:
     """Store an encrypted credential for a tool."""
     try:
@@ -607,6 +698,14 @@ def _build_parser() -> argparse.ArgumentParser:
     inv_p.add_argument("--input", default=None, help="JSON input as a string.")
     inv_p.add_argument("--input-file", default=None, help="Path to a JSON input file.")
 
+    # -- search -------------------------------------------------------------
+    search_p = sub.add_parser("search", help="Semantic search for tools (natural language).")
+    search_p.add_argument("query", help="Natural language search query.")
+    search_p.add_argument(
+        "--top-k", type=int, default=10,
+        help="Maximum number of results (default: 10).",
+    )
+
     # -- list ---------------------------------------------------------------
     list_p = sub.add_parser("list", help="List tools.")
     list_p.add_argument("--tags", default=None, help="Comma-separated tag filter.")
@@ -642,6 +741,34 @@ def _build_parser() -> argparse.ArgumentParser:
     io_p.add_argument(
         "--scope", default="project", choices=["project", "global"],
         help="Scope for imported tools.",
+    )
+
+    # -- import-mcp-registry -----------------------------------------------
+    imr_p = sub.add_parser(
+        "import-mcp-registry", help="Import servers and tools from an MCP registry."
+    )
+    imr_p.add_argument("--registry-url", default=None, help="URL to fetch MCP registry JSON from.")
+    imr_p.add_argument(
+        "--registry-file", default=None, help="Local file path to MCP registry JSON."
+    )
+    imr_p.add_argument(
+        "--namespace", default=None,
+        help="Optional prefix for tool names (e.g. 'acme').",
+    )
+    imr_p.add_argument("--tags", default=None, help="Comma-separated tags.")
+    imr_p.add_argument(
+        "--scope", default="project", choices=["project", "global"],
+        help="Scope for imported entries.",
+    )
+
+    # -- export-mcp-registry -----------------------------------------------
+    emr_p = sub.add_parser(
+        "export-mcp-registry", help="Export MCP servers and tools as registry JSON."
+    )
+    emr_p.add_argument("--output", default=None, help="Output file path (prints to stdout if omitted).")
+    emr_p.add_argument(
+        "--no-global", action="store_true", default=False,
+        help="Exclude global-scoped tools.",
     )
 
     # -- set-credential ----------------------------------------------------
@@ -693,10 +820,13 @@ _COMMANDS: dict[str, Any] = {
     "push": _cmd_push,
     "register": _cmd_register,
     "invoke": _cmd_invoke,
+    "search": _cmd_search,
     "list": _cmd_list,
     "get": _cmd_get,
     "delete": _cmd_delete,
     "import-openapi": _cmd_import_openapi,
+    "import-mcp-registry": _cmd_import_mcp_registry,
+    "export-mcp-registry": _cmd_export_mcp_registry,
     "set-credential": _cmd_set_credential,
     "list-credentials": _cmd_list_credentials,
     "revoke-credential": _cmd_revoke_credential,

@@ -978,3 +978,213 @@ class TestMCPDeleteCommand:
         data = json.loads(capsys.readouterr().out)
         assert data["deleted"] is True
         assert data["server_id"] == "srv-001"
+
+
+# ---------------------------------------------------------------------------
+# MCP Registry Import/Export helpers
+# ---------------------------------------------------------------------------
+
+def _fake_mcp_registry_import_result(**overrides: Any) -> Any:
+    from taproot_sdk.toolbox.models import MCPRegistryImportResult
+
+    defaults: dict[str, Any] = {
+        "servers_created": (_fake_mcp_server(),),
+        "tools_created": (
+            _fake_tool(name="search_server_web_search", tool_type="mcp"),
+        ),
+        "total_servers_parsed": 1,
+        "total_tools_parsed": 1,
+        "servers_skipped": 0,
+        "tools_skipped": 0,
+    }
+    defaults.update(overrides)
+    return MCPRegistryImportResult(**defaults)
+
+
+# ---------------------------------------------------------------------------
+# import-mcp-registry command
+# ---------------------------------------------------------------------------
+
+class TestImportMCPRegistryCommand:
+    @patch.dict(os.environ, _ENV, clear=False)
+    @patch("taproot_sdk.toolbox.cli._make_client")
+    def test_import_with_registry_url(
+        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        client = MagicMock()
+        client.import_mcp_registry = AsyncMock(
+            return_value=_fake_mcp_registry_import_result()
+        )
+        mock_make_client.return_value = client
+
+        main([
+            "import-mcp-registry",
+            "--registry-url", "https://registry.example.com/mcp.json",
+        ])
+
+        client.import_mcp_registry.assert_awaited_once()
+        kw = client.import_mcp_registry.call_args.kwargs
+        assert kw["registry_url"] == "https://registry.example.com/mcp.json"
+
+        out = capsys.readouterr().out
+        assert "Imported 1 servers" in out
+        assert "1 tools" in out
+
+    @patch.dict(os.environ, _ENV, clear=False)
+    @patch("taproot_sdk.toolbox.cli._make_client")
+    def test_import_with_registry_file(
+        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        client = MagicMock()
+        client.import_mcp_registry = AsyncMock(
+            return_value=_fake_mcp_registry_import_result()
+        )
+        mock_make_client.return_value = client
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8",
+        ) as f:
+            json.dump({"servers": []}, f)
+            tmp_path = f.name
+
+        try:
+            main([
+                "import-mcp-registry",
+                "--registry-file", tmp_path,
+            ])
+        finally:
+            os.unlink(tmp_path)
+
+        kw = client.import_mcp_registry.call_args.kwargs
+        assert kw["registry_body"] == {"servers": []}
+        assert kw["registry_url"] is None
+
+    @patch.dict(os.environ, _ENV, clear=False)
+    @patch("taproot_sdk.toolbox.cli._make_client")
+    def test_import_json_output(
+        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        client = MagicMock()
+        client.import_mcp_registry = AsyncMock(
+            return_value=_fake_mcp_registry_import_result(
+                servers_skipped=1,
+                tools_skipped=2,
+                total_servers_parsed=2,
+                total_tools_parsed=3,
+            )
+        )
+        mock_make_client.return_value = client
+
+        main([
+            "--json", "import-mcp-registry",
+            "--registry-url", "https://example.com/mcp.json",
+        ])
+
+        data = json.loads(capsys.readouterr().out)
+        assert data["servers_created"] == 1
+        assert data["tools_created"] == 1
+        assert data["servers_skipped"] == 1
+        assert data["tools_skipped"] == 2
+        assert data["total_servers_parsed"] == 2
+        assert data["total_tools_parsed"] == 3
+
+    @patch.dict(os.environ, _ENV, clear=False)
+    @patch("taproot_sdk.toolbox.cli._make_client")
+    def test_import_with_all_options(
+        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        client = MagicMock()
+        client.import_mcp_registry = AsyncMock(
+            return_value=_fake_mcp_registry_import_result()
+        )
+        mock_make_client.return_value = client
+
+        main([
+            "import-mcp-registry",
+            "--registry-url", "https://registry.example.com/mcp.json",
+            "--namespace", "acme",
+            "--tags", "imported,test",
+            "--scope", "global",
+        ])
+
+        kw = client.import_mcp_registry.call_args.kwargs
+        assert kw["namespace"] == "acme"
+        assert kw["tags"] == ["imported", "test"]
+        assert kw["scope"] == "global"
+
+    @patch.dict(os.environ, _ENV, clear=False)
+    def test_import_missing_source(self) -> None:
+        """Must provide either --registry-url or --registry-file."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["import-mcp-registry"])
+        assert exc_info.value.code == 1
+
+    @patch.dict(os.environ, _ENV, clear=False)
+    def test_import_registry_file_not_found(self) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main([
+                "import-mcp-registry",
+                "--registry-file", "/nonexistent/registry.json",
+            ])
+        assert exc_info.value.code == 1
+
+
+# ---------------------------------------------------------------------------
+# export-mcp-registry command
+# ---------------------------------------------------------------------------
+
+class TestExportMCPRegistryCommand:
+    @patch.dict(os.environ, _ENV, clear=False)
+    @patch("taproot_sdk.toolbox.cli._make_client")
+    def test_export_to_stdout(
+        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        exported = {"servers": [{"name": "test", "url": "https://test.com"}]}
+        client = MagicMock()
+        client.export_mcp_registry = AsyncMock(return_value=exported)
+        mock_make_client.return_value = client
+
+        main(["export-mcp-registry"])
+
+        client.export_mcp_registry.assert_awaited_once()
+        data = json.loads(capsys.readouterr().out)
+        assert data["servers"][0]["name"] == "test"
+
+    @patch.dict(os.environ, _ENV, clear=False)
+    @patch("taproot_sdk.toolbox.cli._make_client")
+    def test_export_to_file(
+        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        exported = {"servers": [{"name": "test", "url": "https://test.com"}]}
+        client = MagicMock()
+        client.export_mcp_registry = AsyncMock(return_value=exported)
+        mock_make_client.return_value = client
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8",
+        ) as f:
+            tmp_path = f.name
+
+        try:
+            main(["export-mcp-registry", "--output", tmp_path])
+
+            with open(tmp_path, encoding="utf-8") as fh:
+                data = json.loads(fh.read())
+            assert data["servers"][0]["name"] == "test"
+            assert "Exported to" in capsys.readouterr().out
+        finally:
+            os.unlink(tmp_path)
+
+    @patch.dict(os.environ, _ENV, clear=False)
+    @patch("taproot_sdk.toolbox.cli._make_client")
+    def test_export_no_global(
+        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        client = MagicMock()
+        client.export_mcp_registry = AsyncMock(return_value={"servers": []})
+        mock_make_client.return_value = client
+
+        main(["export-mcp-registry", "--no-global"])
+
+        kw = client.export_mcp_registry.call_args.kwargs
+        assert kw["include_global"] is False
