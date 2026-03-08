@@ -1445,7 +1445,15 @@ class TaprootClient:
         *,
         project_id: str | None = None,
     ) -> dict[str, Any]:
-        """Add training examples to a prompt."""
+        """Add training examples to a prompt.
+
+        Args:
+            prompt_name: Name of the prompt to add examples to.
+            examples: List of example dicts with keys: input_text, output_text,
+                signal (positive/negative/neutral), correction (optional),
+                metadata (optional).
+            project_id: Override the default project ID.
+        """
         r = await self._request(
             "POST",
             self._project_prompts_path(f"/{prompt_name}/examples", project_id),
@@ -1480,6 +1488,106 @@ class TaprootClient:
         self._raise_for_status(r, service="prompts")
         return r.json()
 
+    async def get_example_stats(
+        self,
+        prompt_name: str,
+        *,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Get example statistics for a prompt.
+
+        Returns counts by signal type, consumed vs pending.
+        """
+        r = await self._request(
+            "GET",
+            self._project_prompts_path(f"/{prompt_name}/examples/stats", project_id),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def delete_example(
+        self,
+        prompt_name: str,
+        example_id: str,
+        *,
+        project_id: str | None = None,
+    ) -> None:
+        """Delete a single example."""
+        r = await self._request(
+            "DELETE",
+            self._project_prompts_path(
+                f"/{prompt_name}/examples/{example_id}", project_id,
+            ),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+
+    # -- Execution Config --
+
+    async def upsert_execution_config(
+        self,
+        prompt_name: str,
+        mode: str,
+        config: dict[str, Any],
+        *,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create or update the APO execution config for a prompt.
+
+        Args:
+            prompt_name: Name of the prompt.
+            mode: Execution mode — "dspy", "callback", or "llm_direct".
+            config: Mode-specific configuration dict. For dspy: lm_model,
+                max_iterations. For callback: url, headers, input_field,
+                output_field, timeout. For llm_direct: model, api_key_env,
+                temperature.
+            project_id: Override the default project ID.
+        """
+        r = await self._request(
+            "PUT",
+            self._project_prompts_path(
+                f"/{prompt_name}/execution-config", project_id,
+            ),
+            json={"mode": mode, "config": config},
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def get_execution_config(
+        self,
+        prompt_name: str,
+        *,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Get the APO execution config for a prompt."""
+        r = await self._request(
+            "GET",
+            self._project_prompts_path(
+                f"/{prompt_name}/execution-config", project_id,
+            ),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def delete_execution_config(
+        self,
+        prompt_name: str,
+        *,
+        project_id: str | None = None,
+    ) -> None:
+        """Delete the APO execution config for a prompt."""
+        r = await self._request(
+            "DELETE",
+            self._project_prompts_path(
+                f"/{prompt_name}/execution-config", project_id,
+            ),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+
     # -- Optimization --
 
     async def trigger_optimization(
@@ -1490,7 +1598,14 @@ class TaprootClient:
         config: dict | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
-        """Trigger an automatic prompt optimization (APO) job."""
+        """Trigger an automatic prompt optimization (APO) job.
+
+        Args:
+            prompt_name: Name of the prompt to optimize.
+            optimizer_name: Optimizer strategy — "MIPROv2", "COPRO", or "GEPA".
+            config: Optimizer-specific config overrides.
+            project_id: Override the default project ID.
+        """
         body: dict[str, Any] = {"optimizer_name": optimizer_name}
         if config is not None:
             body["config"] = config
@@ -1498,6 +1613,22 @@ class TaprootClient:
             "POST",
             self._project_prompts_path(f"/{prompt_name}/optimize", project_id),
             json=body,
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def get_optimization_job(
+        self,
+        job_id: str,
+    ) -> dict[str, Any]:
+        """Get optimization job status by ID.
+
+        Note: This endpoint is not project-scoped — the job_id is globally unique.
+        """
+        r = await self._request(
+            "GET",
+            self._prompts_path(f"/optimization-jobs/{job_id}"),
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
@@ -1515,7 +1646,9 @@ class TaprootClient:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         r = await self._request(
             "GET",
-            self._project_prompts_path(f"/{prompt_name}/optimize", project_id),
+            self._project_prompts_path(
+                f"/{prompt_name}/optimization-jobs", project_id,
+            ),
             params=params,
             service="prompts",
         )
