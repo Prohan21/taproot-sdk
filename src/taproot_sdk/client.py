@@ -1043,7 +1043,7 @@ class TaprootClient:
 
         return PromptResponse(
             schema_version=data.get("schema_version", 1),
-            name=data["name"],
+            name=data.get("name") or data.get("prompt_name", ""),
             version=data["version"],
             content=data["content"],
             content_hash=data["content_hash"],
