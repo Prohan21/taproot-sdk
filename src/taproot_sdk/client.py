@@ -1655,6 +1655,277 @@ class TaprootClient:
         self._raise_for_status(r, service="prompts")
         return r.json()
 
+    # -- Partials --
+
+    async def create_partial(
+        self,
+        name: str,
+        content: str,
+        *,
+        description: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a reusable prompt partial.
+
+        Partials are referenced in prompts via ``{{> partial_name}}`` syntax.
+        """
+        pid = project_id or self.project_id
+        body: dict[str, Any] = {"name": name, "content": content}
+        if description is not None:
+            body["description"] = description
+        r = await self._request(
+            "POST",
+            self._prompts_path(f"/projects/{pid}/partials"),
+            json=body,
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def list_partials(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """List prompt partials in a project."""
+        pid = project_id or self.project_id
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        r = await self._request(
+            "GET",
+            self._prompts_path(f"/projects/{pid}/partials"),
+            params=params,
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def get_partial(
+        self,
+        name: str,
+        *,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Get a prompt partial by name."""
+        pid = project_id or self.project_id
+        r = await self._request(
+            "GET",
+            self._prompts_path(f"/projects/{pid}/partials/{name}"),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def update_partial(
+        self,
+        name: str,
+        content: str,
+        *,
+        description: str | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a prompt partial's content."""
+        pid = project_id or self.project_id
+        body: dict[str, Any] = {"content": content}
+        if description is not None:
+            body["description"] = description
+        r = await self._request(
+            "PUT",
+            self._prompts_path(f"/projects/{pid}/partials/{name}"),
+            json=body,
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def delete_partial(
+        self,
+        name: str,
+        *,
+        project_id: str | None = None,
+    ) -> None:
+        """Delete a prompt partial."""
+        pid = project_id or self.project_id
+        r = await self._request(
+            "DELETE",
+            self._prompts_path(f"/projects/{pid}/partials/{name}"),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+
+    # -- Protected Labels --
+
+    async def create_protected_label(
+        self,
+        label: str,
+        *,
+        require_approval: bool = True,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a protected label rule (admin only).
+
+        When ``require_approval`` is True, the label can only be set on
+        approved versions.
+        """
+        pid = project_id or self.project_id
+        body: dict[str, Any] = {
+            "label": label,
+            "require_approval": require_approval,
+        }
+        r = await self._request(
+            "POST",
+            self._prompts_path(f"/projects/{pid}/protected-labels"),
+            json=body,
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def list_protected_labels(
+        self,
+        *,
+        project_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List protected labels for a project."""
+        pid = project_id or self.project_id
+        r = await self._request(
+            "GET",
+            self._prompts_path(f"/projects/{pid}/protected-labels"),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def delete_protected_label(
+        self,
+        label_name: str,
+        *,
+        project_id: str | None = None,
+    ) -> None:
+        """Remove label protection (admin only)."""
+        pid = project_id or self.project_id
+        r = await self._request(
+            "DELETE",
+            self._prompts_path(f"/projects/{pid}/protected-labels/{label_name}"),
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+
+    # -- Import/Export --
+
+    async def export_prompt(
+        self,
+        prompt_name: str,
+        *,
+        format: str = "json",
+        version: int | None = None,
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Export a single prompt with its version history.
+
+        Args:
+            prompt_name: Name of the prompt to export.
+            format: Export format — "json" or "yaml".
+            version: Optional specific version to export.
+            project_id: Override the default project ID.
+        """
+        params: dict[str, Any] = {"format": format}
+        if version is not None:
+            params["version"] = version
+        r = await self._request(
+            "GET",
+            self._project_prompts_path(f"/{prompt_name}/export", project_id),
+            params=params,
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def export_project(
+        self,
+        *,
+        format: str = "json",
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Export all prompts in a project.
+
+        Args:
+            format: Export format — "json" or "yaml".
+            project_id: Override the default project ID.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "GET",
+            self._prompts_path(f"/projects/{pid}/export"),
+            params={"format": format},
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    async def import_prompts(
+        self,
+        data: dict[str, Any],
+        *,
+        format: str = "json",
+        strategy: str = "create_only",
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Import prompts from a JSON payload.
+
+        Args:
+            data: Import payload — must contain a ``prompts`` key with a list
+                of prompt definitions (matching the export format).
+            format: Import format — "json" or "yaml".
+            strategy: "create_only" (skip existing) or "upsert" (update).
+            project_id: Override the default project ID.
+        """
+        pid = project_id or self.project_id
+        r = await self._request(
+            "POST",
+            self._prompts_path(f"/projects/{pid}/import"),
+            params={"format": format, "strategy": strategy},
+            json=data,
+            service="prompts",
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
+    # -- Examples (CSV Upload) --
+
+    async def upload_csv_examples(
+        self,
+        prompt_name: str,
+        csv_content: str | bytes,
+        *,
+        filename: str = "examples.csv",
+        project_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Upload training examples from CSV content.
+
+        The CSV must have columns: input_text, output_text, and optionally
+        signal, correction, metadata.
+
+        Args:
+            prompt_name: Name of the prompt to add examples to.
+            csv_content: CSV file content as string or bytes.
+            filename: Filename for the upload (default: examples.csv).
+            project_id: Override the default project ID.
+        """
+        if isinstance(csv_content, str):
+            csv_content = csv_content.encode("utf-8")
+        url = self._project_prompts_path(
+            f"/{prompt_name}/examples/upload", project_id,
+        )
+        r = await self._http.request(
+            "POST",
+            url,
+            files={"file": (filename, csv_content, "text/csv")},
+        )
+        self._raise_for_status(r, service="prompts")
+        return r.json()
+
     # ==================================================================
     # Health
     # ==================================================================
