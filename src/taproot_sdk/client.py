@@ -144,6 +144,7 @@ class TaprootClient:
         direct_mode: bool = False,
         cache_ttl_seconds: float = 30.0,
         max_stale_seconds: float = 60.0,
+        agent_id: str | None = None,
     ):
         # Pull from SDK config if available and not explicitly provided
         config = get_config() if is_initialized() else {}
@@ -152,6 +153,7 @@ class TaprootClient:
         self.api_key = api_key or config.get("api_key", "")
         self.project_id = project_id or config.get("project_id", "")
         self.direct_mode = direct_mode
+        self._agent_id = agent_id
 
         if not self.base_url:
             raise ValueError(
@@ -223,8 +225,11 @@ class TaprootClient:
                 kwargs["params"] = params
             if content is not None:
                 kwargs["content"] = content
-            if headers is not None:
-                kwargs["headers"] = headers
+            merged_headers: dict[str, str] | None = headers
+            if self._agent_id:
+                merged_headers = {**(headers or {}), "X-Agent-Id": self._agent_id}
+            if merged_headers is not None:
+                kwargs["headers"] = merged_headers
 
             try:
                 r = await self._http.request(method, path, **kwargs)
