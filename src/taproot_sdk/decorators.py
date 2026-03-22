@@ -112,6 +112,12 @@ def instrument(
                 span.set_attribute("ev.meta.function", func.__name__)
                 span.set_attribute("ev.meta.module", func.__module__)
 
+                # Propagate correlation ID from context into span
+                from taproot_sdk._context import correlation_id_var
+                _cid = correlation_id_var.get(None)
+                if _cid:
+                    span.set_attribute("taproot.correlation_id", _cid)
+
                 # Capture inputs
                 if not ignore_inputs:
                     try:
@@ -170,6 +176,12 @@ def instrument(
                 span.set_attribute("ev.type.node", spankind)
                 span.set_attribute("ev.meta.function", func.__name__)
                 span.set_attribute("ev.meta.module", func.__module__)
+
+                # Propagate correlation ID from context into span
+                from taproot_sdk._context import correlation_id_var
+                _cid = correlation_id_var.get(None)
+                if _cid:
+                    span.set_attribute("taproot.correlation_id", _cid)
 
                 # Capture inputs
                 if not ignore_inputs:

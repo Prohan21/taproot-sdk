@@ -28,6 +28,7 @@ Prompt management and serving:
 from taproot_sdk.client import TaprootClient
 from taproot_sdk.core import get_tracer, init, is_initialized, shutdown
 from taproot_sdk.decorators import instrument
+from taproot_sdk.instrument import instrument_app
 from taproot_sdk.evals import (
     EvalAssertionError,
     EvalResult,
@@ -113,6 +114,8 @@ __all__ = [
     "is_initialized",
     # Decorators
     "instrument",
+    # App instrumentation
+    "instrument_app",
     # Exceptions
     "TaprootError",
     "TaprootAPIError",

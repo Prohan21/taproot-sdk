@@ -228,6 +228,12 @@ class TaprootClient:
             merged_headers: dict[str, str] | None = headers
             if self._agent_id:
                 merged_headers = {**(headers or {}), "X-Agent-Id": self._agent_id}
+            # Auto-propagate correlation ID from context (set by instrument_app
+            # middleware or manually in batch jobs)
+            from taproot_sdk._context import correlation_id_var
+            _cid = correlation_id_var.get(None)
+            if _cid:
+                merged_headers = {**(merged_headers or {}), "X-Correlation-ID": _cid}
             if merged_headers is not None:
                 kwargs["headers"] = merged_headers
 
