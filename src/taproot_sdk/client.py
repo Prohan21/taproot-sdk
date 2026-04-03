@@ -492,6 +492,115 @@ class TaprootClient:
         pid = project_id or self.project_id
         return self._toolbox_path(f"/projects/{pid}/tools{suffix}")
 
+    def _worker_path(self, path: str) -> str:
+        """Build Worker-S path."""
+        if self.direct_mode:
+            return f"/v1{path}"
+        return f"/api/v1/workers/v1{path}"
+
+    # ==================================================================
+    # Worker-S — Virtual Worker Sessions
+    # ==================================================================
+
+    async def create_worker_session(
+        self,
+        message: str,
+        *,
+        user_id: str,
+        email: str,
+        project_ids: list[str] | None = None,
+    ) -> "SessionCreated":
+        """Create a new worker session.
+
+        Note: In production, session creation is called by Front-S backend
+        via trusted proxy, not directly by SDK consumers. Provided here for
+        testing and direct-mode use.
+        """
+        from taproot_sdk.workers.models import SessionCreated
+
+        body = {
+            "user_id": user_id,
+            "email": email,
+            "message": message,
+            "project_ids": project_ids or [self.project_id],
+        }
+        r = await self._request("POST", self._worker_path("/sessions"), json=body, service="workers")
+        self._raise_for_status(r, service="workers")
+        return SessionCreated.from_api_response(r.json())
+
+    async def get_worker_session(self, session_id: str, *, session_token: str) -> "WorkerSession":
+        """Get worker session details."""
+        from taproot_sdk.workers.models import WorkerSession
+
+        r = await self._request(
+            "GET", self._worker_path(f"/sessions/{session_id}"),
+            headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+        )
+        self._raise_for_status(r, service="workers")
+        return WorkerSession.from_api_response(r.json())
+
+    async def send_worker_message(
+        self, session_id: str, message: str, *, session_token: str,
+    ) -> "SessionMessage":
+        """Send a message to a worker session, triggering the execution pipeline."""
+        from taproot_sdk.workers.models import SessionMessage
+
+        r = await self._request(
+            "POST", self._worker_path(f"/sessions/{session_id}/messages"),
+            json={"message": message},
+            headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+        )
+        self._raise_for_status(r, service="workers")
+        return SessionMessage.from_api_response(r.json())
+
+    async def approve_worker_action(
+        self, session_id: str, action_id: str, *, session_token: str,
+        edited_payload: dict | None = None,
+    ) -> "PendingAction":
+        """Approve a pending destructive tool action."""
+        from taproot_sdk.workers.models import PendingAction
+
+        body: dict = {}
+        if edited_payload is not None:
+            body["edited_payload"] = edited_payload
+        r = await self._request(
+            "POST", self._worker_path(f"/sessions/{session_id}/pending-actions/{action_id}/approve"),
+            json=body, headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+        )
+        self._raise_for_status(r, service="workers")
+        return PendingAction.from_api_response(r.json())
+
+    async def reject_worker_action(
+        self, session_id: str, action_id: str, *, session_token: str,
+        reason: str | None = None,
+    ) -> "PendingAction":
+        """Reject a pending destructive tool action (step will be skipped)."""
+        from taproot_sdk.workers.models import PendingAction
+
+        body: dict = {}
+        if reason is not None:
+            body["reason"] = reason
+        r = await self._request(
+            "POST", self._worker_path(f"/sessions/{session_id}/pending-actions/{action_id}/reject"),
+            json=body, headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+        )
+        self._raise_for_status(r, service="workers")
+        return PendingAction.from_api_response(r.json())
+
+    async def delete_worker_session(self, session_id: str, *, session_token: str) -> None:
+        """Delete a worker session and all associated data (cascade)."""
+        r = await self._request(
+            "DELETE", self._worker_path(f"/sessions/{session_id}"),
+            headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+        )
+        self._raise_for_status(r, service="workers")
+
+    async def health_workers(self) -> dict:
+        """Health check for Worker-S."""
+        r = await self._request("GET", self._worker_path("/health"), service="workers")
+        self._raise_for_status(r, service="workers")
+        return r.json()
+
     # ==================================================================
     # Retrieval-S — Store Management
     # ==================================================================

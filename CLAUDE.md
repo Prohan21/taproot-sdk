@@ -44,6 +44,7 @@ Published as `taproot-sdk` on PyPI. Version 0.1.0 (beta), Python 3.11+, Apache 2
 - [x] ToolBox OAuth flow, credential vault, MCP server registration
 - [x] Semantic tool discovery
 - [x] OpenAPI import, MCP registry import/export
+- [x] Worker-S client methods (create/get/send/approve/reject/delete sessions)
 
 ## Build & Development Commands
 
@@ -106,6 +107,9 @@ src/taproot_sdk/
     __init__.py          ToolBox module exports
     models.py            ToolInfo, InvocationResult, CredentialInfo, MCPServerInfo, etc.
     cli.py               taproot-tools CLI entry point (console_scripts)
+  workers/
+    __init__.py
+    models.py             WorkerSession, SessionCreated, SessionMessage, PendingAction
 tests/
   conftest.py            Autouse fixture: reset_sdk() calls shutdown() before/after each test
   test_core.py           TestInit, TestShutdown, TestGetTracer
@@ -356,6 +360,9 @@ async with TaprootClient(...) as client:
 - `start_oauth_flow()`, `complete_oauth_flow()`, `client_credentials_grant()`
 - `register_mcp_server()`, `list_mcp_servers()`, `get_mcp_server()`, `delete_mcp_server()`
 - `get_usage_report()`, `push_decorated_tools()`
+
+**Worker-S** (sessions, messages, actions):
+- `create_worker_session()`, `get_worker_session()`, `send_worker_message()`, `approve_worker_action()`, `reject_worker_action()`, `delete_worker_session()`, `health_workers()`
 
 **Health checks:** `health_retrieval()`, `health_evals()`, `health_evals_basic()`, `health_guardrails()`, `health_prompts()`, `health_toolbox()`
 
