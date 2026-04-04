@@ -23,6 +23,8 @@ class TaprootAPIError(TaprootError):
         service: Which Taproot service returned the error (e.g. "prompts", "evals").
         request_url: The URL that was requested.
         body: Raw response body text.
+        correlation_id: The request correlation ID from the server (for log tracing).
+        method: The HTTP method used (GET, POST, PUT, DELETE, PATCH).
     """
 
     def __init__(
@@ -33,12 +35,16 @@ class TaprootAPIError(TaprootError):
         service: str = "",
         request_url: str = "",
         body: str = "",
+        correlation_id: str | None = None,
+        method: str | None = None,
     ) -> None:
         self.status_code = status_code
         self.detail = detail
         self.service = service
         self.request_url = request_url
         self.body = body
+        self.correlation_id = correlation_id
+        self.method = method
 
         parts: list[str] = [f"HTTP {status_code}"]
         if service:
@@ -46,6 +52,8 @@ class TaprootAPIError(TaprootError):
         parts.append(detail)
         if request_url:
             parts.append(f"(URL: {request_url})")
+        if correlation_id:
+            parts.append(f"(correlation_id: {correlation_id})")
         super().__init__(" — ".join(parts) if len(parts) > 1 else parts[0])
 
 
@@ -61,6 +69,8 @@ class PromptNotFoundError(TaprootAPIError):
         label: str | None = None,
         request_url: str = "",
         body: str = "",
+        correlation_id: str | None = None,
+        method: str | None = None,
     ) -> None:
         self.prompt_name = name
         self.prompt_project_id = project_id
@@ -78,6 +88,7 @@ class PromptNotFoundError(TaprootAPIError):
 
         super().__init__(
             404, detail, service="prompts", request_url=request_url, body=body,
+            correlation_id=correlation_id, method=method,
         )
 
 
@@ -98,6 +109,8 @@ class AuthenticationError(TaprootAPIError):
         request_url: str = "",
         body: str = "",
         project_id: str = "",
+        correlation_id: str | None = None,
+        method: str | None = None,
     ) -> None:
         self.auth_project_id = project_id
 
@@ -120,6 +133,7 @@ class AuthenticationError(TaprootAPIError):
 
         super().__init__(
             status_code, detail, service=service, request_url=request_url, body=body,
+            correlation_id=correlation_id, method=method,
         )
 
 
@@ -133,9 +147,12 @@ class ConflictError(TaprootAPIError):
         service: str = "",
         request_url: str = "",
         body: str = "",
+        correlation_id: str | None = None,
+        method: str | None = None,
     ) -> None:
         super().__init__(
             409, detail, service=service, request_url=request_url, body=body,
+            correlation_id=correlation_id, method=method,
         )
 
 
@@ -154,12 +171,15 @@ class RateLimitError(TaprootAPIError):
         request_url: str = "",
         retry_after: float | None = None,
         body: str = "",
+        correlation_id: str | None = None,
+        method: str | None = None,
     ) -> None:
         self.retry_after = retry_after
         if retry_after is not None and "retry" not in detail.lower():
             detail += f". Retry after {retry_after}s."
         super().__init__(
             429, detail, service=service, request_url=request_url, body=body,
+            correlation_id=correlation_id, method=method,
         )
 
 
@@ -181,6 +201,8 @@ class ServerError(TaprootAPIError):
         body: str = "",
         attempts: int = 1,
         total_wait_seconds: float = 0,
+        correlation_id: str | None = None,
+        method: str | None = None,
     ) -> None:
         self.attempts = attempts
         self.total_wait_seconds = total_wait_seconds
@@ -193,6 +215,7 @@ class ServerError(TaprootAPIError):
             detail += ". This is a server-side issue — please try again later."
         super().__init__(
             status_code, detail, service=service, request_url=request_url, body=body,
+            correlation_id=correlation_id, method=method,
         )
 
 
@@ -211,6 +234,8 @@ class ValidationError(TaprootAPIError):
         service: str = "",
         request_url: str = "",
         body: str = "",
+        correlation_id: str | None = None,
+        method: str | None = None,
     ) -> None:
         self.errors = errors or []
 
@@ -236,4 +261,5 @@ class ValidationError(TaprootAPIError):
 
         super().__init__(
             422, detail, service=service, request_url=request_url, body=body,
+            correlation_id=correlation_id, method=method,
         )

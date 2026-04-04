@@ -74,6 +74,32 @@ class TestTaprootAPIErrorMessage:
         err = TaprootAPIError(500, "fail", service="evals")
         assert "[evals]" in str(err)
 
+    def test_correlation_id_stored_and_in_str(self) -> None:
+        err = TaprootAPIError(
+            500, "Internal server error",
+            service="evals",
+            correlation_id="abc-123-def",
+        )
+        assert err.correlation_id == "abc-123-def"
+        assert "(correlation_id: abc-123-def)" in str(err)
+
+    def test_correlation_id_none_omitted_from_str(self) -> None:
+        err = TaprootAPIError(500, "Internal server error")
+        assert err.correlation_id is None
+        assert "correlation_id" not in str(err)
+
+    def test_method_stored(self) -> None:
+        err = TaprootAPIError(
+            404, "Not found",
+            service="prompts",
+            method="GET",
+        )
+        assert err.method == "GET"
+
+    def test_method_none_by_default(self) -> None:
+        err = TaprootAPIError(404, "Not found")
+        assert err.method is None
+
 
 class TestPromptNotFoundError:
     """PromptNotFoundError includes request_url (gap #2)."""
@@ -206,3 +232,61 @@ class TestRateLimitError:
     def test_no_retry_after(self) -> None:
         err = RateLimitError()
         assert err.retry_after is None
+
+
+class TestCorrelationIdPassthrough:
+    """All subclasses pass through correlation_id and method to TaprootAPIError."""
+
+    def test_prompt_not_found_error(self) -> None:
+        err = PromptNotFoundError(
+            "welcome", project_id="test",
+            correlation_id="cid-001", method="GET",
+        )
+        assert err.correlation_id == "cid-001"
+        assert err.method == "GET"
+        assert "(correlation_id: cid-001)" in str(err)
+
+    def test_authentication_error(self) -> None:
+        err = AuthenticationError(
+            403, "Forbidden",
+            service="evals",
+            correlation_id="cid-002", method="POST",
+        )
+        assert err.correlation_id == "cid-002"
+        assert err.method == "POST"
+        assert "(correlation_id: cid-002)" in str(err)
+
+    def test_conflict_error(self) -> None:
+        err = ConflictError(
+            "Duplicate resource",
+            service="prompts",
+            correlation_id="cid-003", method="PUT",
+        )
+        assert err.correlation_id == "cid-003"
+        assert err.method == "PUT"
+
+    def test_rate_limit_error(self) -> None:
+        err = RateLimitError(
+            retry_after=10.0,
+            correlation_id="cid-004", method="GET",
+        )
+        assert err.correlation_id == "cid-004"
+        assert err.method == "GET"
+
+    def test_server_error(self) -> None:
+        err = ServerError(
+            500, "Internal server error",
+            attempts=3, total_wait_seconds=7,
+            correlation_id="cid-005", method="DELETE",
+        )
+        assert err.correlation_id == "cid-005"
+        assert err.method == "DELETE"
+        assert "(correlation_id: cid-005)" in str(err)
+
+    def test_validation_error(self) -> None:
+        err = ValidationError(
+            errors=[{"loc": ["body", "name"], "msg": "required"}],
+            correlation_id="cid-006", method="PATCH",
+        )
+        assert err.correlation_id == "cid-006"
+        assert err.method == "PATCH"

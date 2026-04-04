@@ -248,6 +248,7 @@ class TaprootClient:
                         request_url=f"{self.base_url}{path}",
                         attempts=attempt + 1,
                         total_wait_seconds=total_wait,
+                        method=method,
                     ) from exc
                 wait = min(2 ** attempt, _MAX_RETRY_WAIT)
                 total_wait += wait
@@ -296,6 +297,7 @@ class TaprootClient:
 
         status = response.status_code
         url = str(response.request.url) if response.request else ""
+        method = response.request.method if response.request else None
         body = response.text
 
         # Try to extract detail from JSON body
@@ -358,6 +360,18 @@ class TaprootClient:
         if not detail:
             detail = ""
 
+        # Extract correlation_id from response body or header for log tracing
+        correlation_id: str | None = None
+        if json_data:
+            correlation_id = (
+                json_data.get("correlation_id")
+                or json_data.get("request_id")
+                or (json_data.get("error", {}) if isinstance(json_data.get("error"), dict)
+                    else {}).get("error_id")
+            )
+        if not correlation_id:
+            correlation_id = response.headers.get("X-Correlation-ID") or None
+
         # Detect serving-layer auth error and provide user-friendly message
         if status == 401 and "X-Api-Key-Id" in (detail or body):
             detail = (
@@ -371,14 +385,17 @@ class TaprootClient:
             raise AuthenticationError(
                 status, detail, service=service, request_url=url, body=body,
                 project_id=project_id or self.project_id,
+                correlation_id=correlation_id, method=method,
             )
         if status == 404:
             raise TaprootAPIError(
                 404, detail or "Not found", service=service, request_url=url, body=body,
+                correlation_id=correlation_id, method=method,
             )
         if status == 409:
             raise ConflictError(
                 detail or "Resource conflict", service=service, request_url=url, body=body,
+                correlation_id=correlation_id, method=method,
             )
         if status == 422:
             # Collect structured errors from both Guardrail-S and FastAPI formats
@@ -398,6 +415,7 @@ class TaprootClient:
             raise ValidationError(
                 detail or "Validation error",
                 errors=errors, service=service, request_url=url, body=body,
+                correlation_id=correlation_id, method=method,
             )
         if status == 429:
             retry_after: float | None = None
@@ -410,6 +428,7 @@ class TaprootClient:
             raise RateLimitError(
                 detail or "Rate limit exceeded", service=service, request_url=url,
                 retry_after=retry_after, body=body,
+                correlation_id=correlation_id, method=method,
             )
 
         # 5xx errors — include retry context
@@ -424,11 +443,31 @@ class TaprootClient:
                 body=body,
                 attempts=attempts,
                 total_wait_seconds=total_wait,
+                correlation_id=correlation_id,
+                method=method,
             )
 
         raise TaprootAPIError(
             status, detail or f"HTTP {status}", service=service, request_url=url, body=body,
+            correlation_id=correlation_id, method=method,
         )
+
+    @staticmethod
+    def _extract_correlation_id(response: httpx.Response) -> str | None:
+        """Extract correlation_id from a response body or header."""
+        try:
+            data = response.json()
+            cid = (
+                data.get("correlation_id")
+                or data.get("request_id")
+                or (data.get("error", {}) if isinstance(data.get("error"), dict)
+                    else {}).get("error_id")
+            )
+            if cid:
+                return str(cid)
+        except Exception:
+            pass
+        return response.headers.get("X-Correlation-ID") or None
 
     # ------------------------------------------------------------------
     # Path helpers
@@ -1115,6 +1154,8 @@ class TaprootClient:
                 version=version, label=label,
                 request_url=str(r.request.url) if r.request else "",
                 body=r.text,
+                correlation_id=self._extract_correlation_id(r),
+                method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts-serving", project_id=project_id)
         return self._parse_prompt_response(r.json())
@@ -1250,6 +1291,8 @@ class TaprootClient:
             raise PromptNotFoundError(
                 name, project_id=project_id or self.project_id,
                 request_url=str(r.request.url) if r.request else "", body=r.text,
+                correlation_id=self._extract_correlation_id(r),
+                method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
         return r.json()
@@ -1281,6 +1324,8 @@ class TaprootClient:
             raise PromptNotFoundError(
                 name, project_id=project_id or self.project_id,
                 request_url=str(r.request.url) if r.request else "", body=r.text,
+                correlation_id=self._extract_correlation_id(r),
+                method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
         return r.json()
@@ -1310,6 +1355,8 @@ class TaprootClient:
             raise PromptNotFoundError(
                 name, project_id=project_id or self.project_id,
                 request_url=str(r.request.url) if r.request else "", body=r.text,
+                correlation_id=self._extract_correlation_id(r),
+                method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
 
@@ -1391,6 +1438,8 @@ class TaprootClient:
                 prompt_name, project_id=project_id or self.project_id,
                 version=version,
                 request_url=str(r.request.url) if r.request else "", body=r.text,
+                correlation_id=self._extract_correlation_id(r),
+                method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
         return r.json()
@@ -1489,6 +1538,8 @@ class TaprootClient:
                 prompt_name, project_id=project_id or self.project_id,
                 label=label,
                 request_url=str(r.request.url) if r.request else "", body=r.text,
+                correlation_id=self._extract_correlation_id(r),
+                method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
         return r.json()
