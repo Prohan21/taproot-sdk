@@ -464,11 +464,14 @@ class TestDocumentOperations:
             "s",
             doc_id="d-1",
             source_uri="s3://bucket/new.pdf",
+            content_hash="hash-1",
         )
 
         assert isinstance(result, DocumentOperationResult)
         assert result.operation == "replace"
+        assert "Idempotency-Key" in route.calls[0].request.headers
         assert b'"selector":{"doc_id":"d-1"}' in route.calls[0].request.content
+        assert b'"content_hash":"hash-1"' in route.calls[0].request.content
 
     @respx.mock
     @pytest.mark.asyncio
@@ -485,6 +488,7 @@ class TestDocumentOperations:
         result = await c.delete_document_by_selector("s", filename="doc.pdf")
 
         assert result.is_terminal is True
+        assert "Idempotency-Key" in route.calls[0].request.headers
         assert b'"selector":{"filename":"doc.pdf"}' in route.calls[0].request.content
 
 

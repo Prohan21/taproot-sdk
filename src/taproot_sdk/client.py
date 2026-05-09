@@ -1051,12 +1051,14 @@ class TaprootClient:
         content_base64: str | None = None,
         filename: str | None = None,
         content_type: str | None = None,
+        content_hash: str | None = None,
         metadata: dict[str, Any] | None = None,
         chunking: dict[str, Any] | None = None,
         pipeline_id: str = "default",
         idempotency_key: str | None = None,
     ) -> DocumentOperationResult:
         """Create a logical document through the registry-backed operation API."""
+        idempotency_key = idempotency_key or str(uuid.uuid4())
         body: dict[str, Any] = {
             "doc_id": doc_id,
             "source": self._document_source_payload(
@@ -1065,6 +1067,7 @@ class TaprootClient:
                 content_base64=content_base64,
                 filename=filename,
                 content_type=content_type,
+                content_hash=content_hash,
             ),
             "pipeline_id": pipeline_id,
         }
@@ -1072,7 +1075,7 @@ class TaprootClient:
             body["metadata"] = metadata
         if chunking is not None:
             body["chunking"] = chunking
-        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        headers = {"Idempotency-Key": idempotency_key}
         r = await self._request(
             "POST", self._retrieval_path(f"/stores/{store_name}/documents"),
             json=body, headers=headers, service="retrieval",
@@ -1091,12 +1094,14 @@ class TaprootClient:
         content_base64: str | None = None,
         filename: str | None = None,
         content_type: str | None = None,
+        content_hash: str | None = None,
         metadata: dict[str, Any] | None = None,
         chunking: dict[str, Any] | None = None,
         pipeline_id: str = "default",
         idempotency_key: str | None = None,
     ) -> DocumentOperationResult:
         """Fully replace a logical document selected by doc_id or filename."""
+        idempotency_key = idempotency_key or str(uuid.uuid4())
         selector: dict[str, str] = {}
         if doc_id is not None:
             selector["doc_id"] = doc_id
@@ -1110,6 +1115,7 @@ class TaprootClient:
                 content_base64=content_base64,
                 filename=filename,
                 content_type=content_type,
+                content_hash=content_hash,
             ),
             "pipeline_id": pipeline_id,
         }
@@ -1117,7 +1123,7 @@ class TaprootClient:
             body["metadata"] = metadata
         if chunking is not None:
             body["chunking"] = chunking
-        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        headers = {"Idempotency-Key": idempotency_key}
         r = await self._request(
             "PUT", self._retrieval_path(f"/stores/{store_name}/documents"),
             json=body, headers=headers, service="retrieval",
@@ -1134,12 +1140,13 @@ class TaprootClient:
         idempotency_key: str | None = None,
     ) -> DocumentOperationResult:
         """Delete a logical document selected by doc_id or filename."""
+        idempotency_key = idempotency_key or str(uuid.uuid4())
         selector: dict[str, str] = {}
         if doc_id is not None:
             selector["doc_id"] = doc_id
         if filename is not None:
             selector["filename"] = filename
-        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        headers = {"Idempotency-Key": idempotency_key}
         r = await self._request(
             "POST", self._retrieval_path(f"/stores/{store_name}/documents/delete"),
             json={"selector": selector}, headers=headers, service="retrieval",
@@ -1155,6 +1162,7 @@ class TaprootClient:
         content_base64: str | None = None,
         filename: str | None = None,
         content_type: str | None = None,
+        content_hash: str | None = None,
     ) -> dict[str, Any]:
         source: dict[str, Any] = {}
         if source_uri is not None:
@@ -1167,6 +1175,8 @@ class TaprootClient:
             source["filename"] = filename
         if content_type is not None:
             source["content_type"] = content_type
+        if content_hash is not None:
+            source["content_hash"] = content_hash
         return source
 
     # ==================================================================
