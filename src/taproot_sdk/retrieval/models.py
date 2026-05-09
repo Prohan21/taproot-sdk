@@ -673,6 +673,38 @@ class DocumentDeleted:
         )
 
 
+@dataclass(frozen=True)
+class DocumentOperationResult:
+    """Response from a document create, replace, or selector-delete operation."""
+
+    operation_id: str
+    operation: str
+    status: str
+    job_id: str | None
+    document_id: str | None
+    doc_id: str | None
+    polling_url: str | None
+    idempotency_key: str | None
+
+    @property
+    def is_terminal(self) -> bool:
+        """True when the operation no longer has queued work."""
+        return self.status in ("completed", "failed")
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> DocumentOperationResult:
+        return cls(
+            operation_id=data.get("operation_id", ""),
+            operation=data.get("operation", ""),
+            status=data.get("status", ""),
+            job_id=data.get("job_id"),
+            document_id=data.get("document_id"),
+            doc_id=data.get("doc_id"),
+            polling_url=data.get("polling_url"),
+            idempotency_key=data.get("idempotency_key"),
+        )
+
+
 # ===================================================================
 # Chunk Models
 # ===================================================================

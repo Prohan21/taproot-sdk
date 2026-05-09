@@ -27,7 +27,8 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any
+from contextlib import suppress
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -72,20 +73,6 @@ from taproot_sdk.prompts.models import (
     PromptType,
     ToolDefinition,
 )
-from taproot_sdk.toolbox.models import (
-    CredentialInfo,
-    CredentialList,
-    ImportResult,
-    InvocationResult,
-    MCPRegistryImportResult,
-    MCPServerInfo,
-    MCPServerList,
-    OAuthConnectionInfo,
-    OAuthFlowResponse,
-    ToolInfo,
-    ToolList,
-    UsageReport,
-)
 from taproot_sdk.retrieval.models import (
     AccessGranted,
     AccessList,
@@ -101,6 +88,7 @@ from taproot_sdk.retrieval.models import (
     DocumentDeleted,
     DocumentDetail,
     DocumentList,
+    DocumentOperationResult,
     IngestionJob,
     JobCancelled,
     JobDetail,
@@ -112,6 +100,28 @@ from taproot_sdk.retrieval.models import (
     StoreList,
     StoreStatistics,
 )
+from taproot_sdk.toolbox.models import (
+    CredentialInfo,
+    CredentialList,
+    ImportResult,
+    InvocationResult,
+    MCPRegistryImportResult,
+    MCPServerInfo,
+    MCPServerList,
+    OAuthConnectionInfo,
+    OAuthFlowResponse,
+    ToolInfo,
+    ToolList,
+    UsageReport,
+)
+
+if TYPE_CHECKING:
+    from taproot_sdk.workers.models import (
+        PendingAction,
+        SessionCreated,
+        SessionMessage,
+        WorkerSession,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -421,10 +431,8 @@ class TaprootClient:
             retry_after: float | None = None
             raw = response.headers.get("retry-after")
             if raw:
-                try:
+                with suppress(ValueError):
                     retry_after = float(raw)
-                except ValueError:
-                    pass
             raise RateLimitError(
                 detail or "Rate limit exceeded", service=service, request_url=url,
                 retry_after=retry_after, body=body,
@@ -548,7 +556,7 @@ class TaprootClient:
         user_id: str,
         email: str,
         project_ids: list[str] | None = None,
-    ) -> "SessionCreated":
+    ) -> SessionCreated:
         """Create a new worker session.
 
         Note: In production, session creation is called by Front-S backend
@@ -567,7 +575,7 @@ class TaprootClient:
         self._raise_for_status(r, service="workers")
         return SessionCreated.from_api_response(r.json())
 
-    async def get_worker_session(self, session_id: str, *, session_token: str) -> "WorkerSession":
+    async def get_worker_session(self, session_id: str, *, session_token: str) -> WorkerSession:
         """Get worker session details."""
         from taproot_sdk.workers.models import WorkerSession
 
@@ -580,7 +588,7 @@ class TaprootClient:
 
     async def send_worker_message(
         self, session_id: str, message: str, *, session_token: str,
-    ) -> "SessionMessage":
+    ) -> SessionMessage:
         """Send a message to a worker session, triggering the execution pipeline."""
         from taproot_sdk.workers.models import SessionMessage
 
@@ -595,7 +603,7 @@ class TaprootClient:
     async def approve_worker_action(
         self, session_id: str, action_id: str, *, session_token: str,
         edited_payload: dict | None = None,
-    ) -> "PendingAction":
+    ) -> PendingAction:
         """Approve a pending destructive tool action."""
         from taproot_sdk.workers.models import PendingAction
 
@@ -612,7 +620,7 @@ class TaprootClient:
     async def reject_worker_action(
         self, session_id: str, action_id: str, *, session_token: str,
         reason: str | None = None,
-    ) -> "PendingAction":
+    ) -> PendingAction:
         """Reject a pending destructive tool action (step will be skipped)."""
         from taproot_sdk.workers.models import PendingAction
 
@@ -1032,6 +1040,134 @@ class TaprootClient:
         )
         self._raise_for_status(r, service="retrieval")
         return DocumentDeleted.from_api_response(r.json())
+
+    async def create_document(
+        self,
+        store_name: str,
+        *,
+        doc_id: str,
+        source_uri: str | None = None,
+        signed_url: str | None = None,
+        content_base64: str | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        chunking: dict[str, Any] | None = None,
+        pipeline_id: str = "default",
+        idempotency_key: str | None = None,
+    ) -> DocumentOperationResult:
+        """Create a logical document through the registry-backed operation API."""
+        body: dict[str, Any] = {
+            "doc_id": doc_id,
+            "source": self._document_source_payload(
+                source_uri=source_uri,
+                signed_url=signed_url,
+                content_base64=content_base64,
+                filename=filename,
+                content_type=content_type,
+            ),
+            "pipeline_id": pipeline_id,
+        }
+        if metadata is not None:
+            body["metadata"] = metadata
+        if chunking is not None:
+            body["chunking"] = chunking
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        r = await self._request(
+            "POST", self._retrieval_path(f"/stores/{store_name}/documents"),
+            json=body, headers=headers, service="retrieval",
+        )
+        self._raise_for_status(r, service="retrieval")
+        return DocumentOperationResult.from_api_response(r.json())
+
+    async def replace_document(
+        self,
+        store_name: str,
+        *,
+        doc_id: str | None = None,
+        filename_selector: str | None = None,
+        source_uri: str | None = None,
+        signed_url: str | None = None,
+        content_base64: str | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        chunking: dict[str, Any] | None = None,
+        pipeline_id: str = "default",
+        idempotency_key: str | None = None,
+    ) -> DocumentOperationResult:
+        """Fully replace a logical document selected by doc_id or filename."""
+        selector: dict[str, str] = {}
+        if doc_id is not None:
+            selector["doc_id"] = doc_id
+        if filename_selector is not None:
+            selector["filename"] = filename_selector
+        body: dict[str, Any] = {
+            "selector": selector,
+            "source": self._document_source_payload(
+                source_uri=source_uri,
+                signed_url=signed_url,
+                content_base64=content_base64,
+                filename=filename,
+                content_type=content_type,
+            ),
+            "pipeline_id": pipeline_id,
+        }
+        if metadata is not None:
+            body["metadata"] = metadata
+        if chunking is not None:
+            body["chunking"] = chunking
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        r = await self._request(
+            "PUT", self._retrieval_path(f"/stores/{store_name}/documents"),
+            json=body, headers=headers, service="retrieval",
+        )
+        self._raise_for_status(r, service="retrieval")
+        return DocumentOperationResult.from_api_response(r.json())
+
+    async def delete_document_by_selector(
+        self,
+        store_name: str,
+        *,
+        doc_id: str | None = None,
+        filename: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> DocumentOperationResult:
+        """Delete a logical document selected by doc_id or filename."""
+        selector: dict[str, str] = {}
+        if doc_id is not None:
+            selector["doc_id"] = doc_id
+        if filename is not None:
+            selector["filename"] = filename
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        r = await self._request(
+            "POST", self._retrieval_path(f"/stores/{store_name}/documents/delete"),
+            json={"selector": selector}, headers=headers, service="retrieval",
+        )
+        self._raise_for_status(r, service="retrieval")
+        return DocumentOperationResult.from_api_response(r.json())
+
+    def _document_source_payload(
+        self,
+        *,
+        source_uri: str | None = None,
+        signed_url: str | None = None,
+        content_base64: str | None = None,
+        filename: str | None = None,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
+        source: dict[str, Any] = {}
+        if source_uri is not None:
+            source["source_uri"] = source_uri
+        if signed_url is not None:
+            source["signed_url"] = signed_url
+        if content_base64 is not None:
+            source["content_base64"] = content_base64
+        if filename is not None:
+            source["filename"] = filename
+        if content_type is not None:
+            source["content_type"] = content_type
+        return source
 
     # ==================================================================
     # Retrieval-S — Chunk Management

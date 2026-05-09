@@ -11,7 +11,6 @@ import respx
 from taproot_sdk.client import TaprootClient
 from taproot_sdk.exceptions import AuthenticationError, TaprootAPIError, ValidationError
 from taproot_sdk.retrieval.models import (
-    AccessList,
     BatchCancelled,
     BatchCreated,
     BatchStatus,
@@ -22,6 +21,7 @@ from taproot_sdk.retrieval.models import (
     DocumentDeleted,
     DocumentDetail,
     DocumentList,
+    DocumentOperationResult,
     IngestionJob,
     JobCancelled,
     JobDetail,
@@ -416,6 +416,76 @@ class TestDeleteDocument:
         result = await c.delete_document("s", "d-1")
         assert isinstance(result, DocumentDeleted)
         assert result.chunks_deleted == 10
+
+
+class TestDocumentOperations:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_create_document_operation(self):
+        route = respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents").mock(
+            return_value=_json_resp({
+                "operation_id": "idem-1",
+                "operation": "create",
+                "status": "queued",
+                "job_id": "j-1",
+                "doc_id": "d-1",
+                "idempotency_key": "idem-1",
+            })
+        )
+        c = _client()
+        result = await c.create_document(
+            "s",
+            doc_id="d-1",
+            source_uri="s3://bucket/doc.pdf",
+            idempotency_key="idem-1",
+        )
+
+        assert isinstance(result, DocumentOperationResult)
+        assert result.operation == "create"
+        assert result.job_id == "j-1"
+        assert route.calls[0].request.headers["Idempotency-Key"] == "idem-1"
+        assert b'"doc_id":"d-1"' in route.calls[0].request.content
+        assert b'"source_uri":"s3://bucket/doc.pdf"' in route.calls[0].request.content
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_replace_document_operation(self):
+        route = respx.put(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents").mock(
+            return_value=_json_resp({
+                "operation_id": "op-1",
+                "operation": "replace",
+                "status": "queued",
+                "job_id": "j-1",
+                "doc_id": "d-1",
+            })
+        )
+        c = _client()
+        result = await c.replace_document(
+            "s",
+            doc_id="d-1",
+            source_uri="s3://bucket/new.pdf",
+        )
+
+        assert isinstance(result, DocumentOperationResult)
+        assert result.operation == "replace"
+        assert b'"selector":{"doc_id":"d-1"}' in route.calls[0].request.content
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_delete_document_by_selector_operation(self):
+        route = respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents/delete").mock(
+            return_value=_json_resp({
+                "operation_id": "op-1",
+                "operation": "delete",
+                "status": "completed",
+                "doc_id": "d-1",
+            })
+        )
+        c = _client()
+        result = await c.delete_document_by_selector("s", filename="doc.pdf")
+
+        assert result.is_terminal is True
+        assert b'"selector":{"filename":"doc.pdf"}' in route.calls[0].request.content
 
 
 # ==================================================================
