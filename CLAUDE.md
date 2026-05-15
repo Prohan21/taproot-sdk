@@ -931,3 +931,7 @@ async def test_agent_quality(eval_run):
 | `src/taproot_sdk/retrieval/models.py` | 757 | 20+ retrieval frozen dataclasses |
 | `src/taproot_sdk/toolbox/models.py` | 390 | ToolInfo, InvocationResult, MCPServerInfo, etc. |
 | `src/taproot_sdk/toolbox/cli.py` | 866 | taproot-tools CLI with 16+ subcommands |
+
+## Comments
+
+Write none by default. Only add one when the *why* is non-obvious.

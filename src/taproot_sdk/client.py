@@ -32,6 +32,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from taproot_sdk._context import (
+    HEADER_CORRELATION_ID,
+    correlation_id_var,
+    merge_propagation_headers,
+)
 from taproot_sdk.core import get_config, is_initialized
 from taproot_sdk.evals.models import (
     AlertHistory,
@@ -226,6 +231,7 @@ class TaprootClient:
         """
         total_wait = 0.0
         r: httpx.Response | None = None
+        merged_headers = self._propagation_headers(headers)
 
         for attempt in range(_MAX_RETRIES + 1):
             kwargs: dict[str, Any] = {}
@@ -235,16 +241,7 @@ class TaprootClient:
                 kwargs["params"] = params
             if content is not None:
                 kwargs["content"] = content
-            merged_headers: dict[str, str] | None = headers
-            if self._agent_id:
-                merged_headers = {**(headers or {}), "X-Agent-Id": self._agent_id}
-            # Auto-propagate correlation ID from context (set by instrument_app
-            # middleware or manually in batch jobs)
-            from taproot_sdk._context import correlation_id_var
-            _cid = correlation_id_var.get(None)
-            if _cid:
-                merged_headers = {**(merged_headers or {}), "X-Correlation-ID": _cid}
-            if merged_headers is not None:
+            if merged_headers:
                 kwargs["headers"] = merged_headers
 
             try:
@@ -287,6 +284,20 @@ class TaprootClient:
         r._taproot_attempts = _MAX_RETRIES + 1  # type: ignore[attr-defined]
         r._taproot_total_wait = total_wait  # type: ignore[attr-defined]
         return r
+
+    def _propagation_headers(self, headers: dict[str, str] | None) -> dict[str, str]:
+        merged = dict(headers or {})
+        existing = {key.lower() for key in merged}
+
+        if self._agent_id and "x-agent-id" not in existing:
+            merged["X-Agent-Id"] = self._agent_id
+            existing.add("x-agent-id")
+
+        _cid = correlation_id_var.get(None)
+        if _cid and HEADER_CORRELATION_ID.lower() not in existing:
+            merged[HEADER_CORRELATION_ID] = _cid
+
+        return merge_propagation_headers(merged)
 
     def _raise_for_status(
         self,
