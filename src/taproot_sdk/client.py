@@ -1044,7 +1044,7 @@ class TaprootClient:
         return DocumentDetail.from_api_response(r.json())
 
     async def delete_document(self, store_name: str, doc_id: str) -> DocumentDeleted:
-        """Delete a document and all its chunks."""
+        """Soft-delete a logical document; retained chunks remain until retention purge."""
         r = await self._request(
             "DELETE", self._retrieval_path(f"/stores/{store_name}/documents/{doc_id}"),
             service="retrieval",
@@ -1056,7 +1056,6 @@ class TaprootClient:
         self,
         store_name: str,
         *,
-        doc_id: str,
         source_uri: str | None = None,
         signed_url: str | None = None,
         content_base64: str | None = None,
@@ -1071,7 +1070,6 @@ class TaprootClient:
         """Create a logical document through the registry-backed operation API."""
         idempotency_key = idempotency_key or str(uuid.uuid4())
         body: dict[str, Any] = {
-            "doc_id": doc_id,
             "source": self._document_source_payload(
                 source_uri=source_uri,
                 signed_url=signed_url,
@@ -1150,7 +1148,7 @@ class TaprootClient:
         filename: str | None = None,
         idempotency_key: str | None = None,
     ) -> DocumentOperationResult:
-        """Delete a logical document selected by doc_id or filename."""
+        """Soft-delete a logical document selected by doc_id or filename."""
         idempotency_key = idempotency_key or str(uuid.uuid4())
         selector: dict[str, str] = {}
         if doc_id is not None:
