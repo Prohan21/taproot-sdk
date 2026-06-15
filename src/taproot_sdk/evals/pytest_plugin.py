@@ -18,12 +18,14 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from taproot_sdk.client import TaprootClient
     from taproot_sdk.evals.models import EvalResult
 
 
 @pytest.fixture
-def eval_client() -> "TaprootClient":
+def eval_client() -> TaprootClient:
     """Create a TaprootClient from environment variables.
 
     Requires:
@@ -53,7 +55,7 @@ def eval_client() -> "TaprootClient":
 
 
 @pytest.fixture
-def eval_run(eval_client: "TaprootClient"):
+def eval_run(eval_client: TaprootClient) -> Callable[..., Awaitable[EvalResult]]:
     """Factory fixture: triggers a test run and waits for completion.
 
     Usage:
@@ -61,7 +63,6 @@ def eval_run(eval_client: "TaprootClient"):
             result = await eval_run("test-config-uuid")
             assert_eval(result, min_pass_rate=80)
     """
-    import asyncio
 
     async def _run(
         test_config_id: str,
@@ -70,12 +71,16 @@ def eval_run(eval_client: "TaprootClient"):
         poll_interval: float = 5,
         tags: list[str] | None = None,
         description: str | None = None,
-    ) -> "EvalResult":
+    ) -> EvalResult:
         handle = await eval_client.trigger_eval_run(
-            test_config_id, tags=tags, description=description,
+            test_config_id,
+            tags=tags,
+            description=description,
         )
         return await eval_client.wait_for_eval(
-            handle.run_id, timeout=timeout, poll_interval=poll_interval,
+            handle.run_id,
+            timeout=timeout,
+            poll_interval=poll_interval,
         )
 
     return _run

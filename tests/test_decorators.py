@@ -137,11 +137,15 @@ class TestInstrumentDecorator:
             "rerank",
         ]
 
-        for kind in span_kinds:
-
+        def make_func(kind):
             @instrument(spankind=kind)
             def test_func():
                 return kind
+
+            return test_func
+
+        for kind in span_kinds:
+            test_func = make_func(kind)
 
             result = test_func()
             assert result == kind

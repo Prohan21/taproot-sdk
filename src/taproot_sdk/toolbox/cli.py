@@ -17,12 +17,15 @@ import asyncio
 import json
 import os
 import sys
-from typing import Any, NoReturn, Sequence
+from typing import TYPE_CHECKING, Any, NoReturn
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _env(name: str) -> str:
     """Return an env var or print an error and exit."""
@@ -117,11 +120,13 @@ def _print_tool_info(tool: Any, *, as_json: bool = False) -> None:
 
 def _print_tool_table(tool_list: Any, *, as_json: bool = False) -> None:
     if as_json:
-        _print_json({
-            "project_id": tool_list.project_id,
-            "count": tool_list.count,
-            "tools": [_tool_info_to_dict(t) for t in tool_list.tools],
-        })
+        _print_json(
+            {
+                "project_id": tool_list.project_id,
+                "count": tool_list.count,
+                "tools": [_tool_info_to_dict(t) for t in tool_list.tools],
+            }
+        )
         return
 
     if not tool_list.tools:
@@ -133,10 +138,7 @@ def _print_tool_table(tool_list: Any, *, as_json: bool = False) -> None:
     print(header)
     print("-" * len(header))
     for t in tool_list.tools:
-        print(
-            f"{t.id:<36}  {t.name:<20}  {t.tool_type:<10}  "
-            f"{t.status:<12}  {t.version:>3}"
-        )
+        print(f"{t.id:<36}  {t.name:<20}  {t.tool_type:<10}  {t.status:<12}  {t.version:>3}")
     print(f"\n{tool_list.count} tool(s) in project {tool_list.project_id}")
 
 
@@ -159,6 +161,7 @@ def _print_invocation(inv: Any, *, as_json: bool = False) -> None:
 # Subcommands
 # ---------------------------------------------------------------------------
 
+
 def _cmd_push(args: argparse.Namespace) -> None:
     """Read source file and push a hosted tool."""
     try:
@@ -170,10 +173,12 @@ def _cmd_push(args: argparse.Namespace) -> None:
         _die(f"Cannot read file {args.file_path}: {exc}")
 
     client = _make_client()
-    requirements = [r.strip() for r in args.requirements.split(",") if r.strip()] \
-        if args.requirements else None
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
-        if args.tags else None
+    requirements = (
+        [r.strip() for r in args.requirements.split(",") if r.strip()]
+        if args.requirements
+        else None
+    )
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else None
 
     tool = asyncio.run(
         client.push_tool(
@@ -194,8 +199,7 @@ def _cmd_push(args: argparse.Namespace) -> None:
 def _cmd_register(args: argparse.Namespace) -> None:
     """Register an external HTTP tool."""
     client = _make_client()
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
-        if args.tags else None
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else None
 
     tool = asyncio.run(
         client.register_tool(
@@ -242,17 +246,14 @@ def _cmd_invoke(args: argparse.Namespace) -> None:
 def _cmd_search(args: argparse.Namespace) -> None:
     """Semantic search for tools using natural language."""
     client = _make_client()
-    tool_list = asyncio.run(
-        client.discover_tools(args.query, top_k=args.top_k)
-    )
+    tool_list = asyncio.run(client.discover_tools(args.query, top_k=args.top_k))
     _print_tool_table(tool_list, as_json=args.json)
 
 
 def _cmd_list(args: argparse.Namespace) -> None:
     """List tools."""
     client = _make_client()
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
-        if args.tags else None
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else None
 
     tool_list = asyncio.run(
         client.list_tools(
@@ -284,6 +285,7 @@ def _cmd_delete(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 # Credential helpers
 # ---------------------------------------------------------------------------
+
 
 def _credential_info_to_dict(cred: Any) -> dict[str, Any]:
     """Convert a ``CredentialInfo`` frozen dataclass to a plain dict."""
@@ -320,11 +322,13 @@ def _print_credential_info(cred: Any, *, as_json: bool = False) -> None:
 
 def _print_credential_table(cred_list: Any, *, as_json: bool = False) -> None:
     if as_json:
-        _print_json({
-            "project_id": cred_list.project_id,
-            "count": cred_list.count,
-            "credentials": [_credential_info_to_dict(c) for c in cred_list.credentials],
-        })
+        _print_json(
+            {
+                "project_id": cred_list.project_id,
+                "count": cred_list.count,
+                "credentials": [_credential_info_to_dict(c) for c in cred_list.credentials],
+            }
+        )
         return
 
     if not cred_list.credentials:
@@ -335,16 +339,14 @@ def _print_credential_table(cred_list: Any, *, as_json: bool = False) -> None:
     print(header)
     print("-" * len(header))
     for c in cred_list.credentials:
-        print(
-            f"{c.id:<36}  {c.name:<20}  {c.credential_type:<12}  "
-            f"{c.status:<10}  {c.version:>3}"
-        )
+        print(f"{c.id:<36}  {c.name:<20}  {c.credential_type:<12}  {c.status:<10}  {c.version:>3}")
     print(f"\n{cred_list.count} credential(s) in project {cred_list.project_id}")
 
 
 # ---------------------------------------------------------------------------
 # MCP server helpers
 # ---------------------------------------------------------------------------
+
 
 def _mcp_server_to_dict(srv: Any) -> dict[str, Any]:
     """Convert an ``MCPServerInfo`` frozen dataclass to a plain dict."""
@@ -391,27 +393,25 @@ def _print_mcp_server_info(srv: Any, *, as_json: bool = False) -> None:
 
 def _print_mcp_server_table(srv_list: Any, *, as_json: bool = False) -> None:
     if as_json:
-        _print_json({
-            "project_id": srv_list.project_id,
-            "count": srv_list.count,
-            "servers": [_mcp_server_to_dict(s) for s in srv_list.servers],
-        })
+        _print_json(
+            {
+                "project_id": srv_list.project_id,
+                "count": srv_list.count,
+                "servers": [_mcp_server_to_dict(s) for s in srv_list.servers],
+            }
+        )
         return
 
     if not srv_list.servers:
         print("No MCP servers found.")
         return
 
-    header = (
-        f"{'ID':<36}  {'NAME':<20}  {'TRANSPORT':<10}  "
-        f"{'HEALTH':<10}  {'SCOPE':<8}"
-    )
+    header = f"{'ID':<36}  {'NAME':<20}  {'TRANSPORT':<10}  {'HEALTH':<10}  {'SCOPE':<8}"
     print(header)
     print("-" * len(header))
     for s in srv_list.servers:
         print(
-            f"{s.id:<36}  {s.name:<20}  {s.transport_type:<10}  "
-            f"{s.health_status:<10}  {s.scope:<8}"
+            f"{s.id:<36}  {s.name:<20}  {s.transport_type:<10}  {s.health_status:<10}  {s.scope:<8}"
         )
     print(f"\n{srv_list.count} server(s) in project {srv_list.project_id}")
 
@@ -419,6 +419,7 @@ def _print_mcp_server_table(srv_list: Any, *, as_json: bool = False) -> None:
 # ---------------------------------------------------------------------------
 # Credential subcommands
 # ---------------------------------------------------------------------------
+
 
 def _cmd_import_openapi(args: argparse.Namespace) -> None:
     """Import tools from an OpenAPI spec."""
@@ -438,8 +439,7 @@ def _cmd_import_openapi(args: argparse.Namespace) -> None:
         _die("Specify --spec-url or --spec-file.")
 
     client = _make_client()
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
-        if args.tags else None
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else None
 
     result = asyncio.run(
         client.import_openapi(
@@ -454,24 +454,27 @@ def _cmd_import_openapi(args: argparse.Namespace) -> None:
     )
 
     if args.json:
-        _print_json({
-            "tools_created": len(result.tools_created),
-            "tools_skipped": result.tools_skipped,
-            "total_parsed": result.total_parsed,
-            "namespace": result.namespace,
-            "tool_names": [t.name for t in result.tools_created],
-        })
-    else:
-        print(
-            f"Imported {len(result.tools_created)} tools "
-            f"from namespace '{result.namespace}'"
+        _print_json(
+            {
+                "tools_created": len(result.tools_created),
+                "tools_skipped": result.tools_skipped,
+                "total_parsed": result.total_parsed,
+                "namespace": result.namespace,
+                "tool_names": [t.name for t in result.tools_created],
+            }
         )
+    else:
+        print(f"Imported {len(result.tools_created)} tools from namespace '{result.namespace}'")
         print(f"  Skipped: {result.tools_skipped} (already exist)")
         print(f"  Total parsed: {result.total_parsed}")
         if result.tools_created:
             print("\nCreated tools:")
             for tool in result.tools_created:
-                desc = tool.description[:60] + "..." if len(tool.description) > 60 else tool.description
+                desc = (
+                    tool.description[:60] + "..."
+                    if len(tool.description) > 60
+                    else tool.description
+                )
                 print(f"  - {tool.name}: {desc}")
 
 
@@ -493,8 +496,7 @@ def _cmd_import_mcp_registry(args: argparse.Namespace) -> None:
         _die("Specify --registry-url or --registry-file.")
 
     client = _make_client()
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
-        if args.tags else None
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else None
 
     result = asyncio.run(
         client.import_mcp_registry(
@@ -507,21 +509,20 @@ def _cmd_import_mcp_registry(args: argparse.Namespace) -> None:
     )
 
     if args.json:
-        _print_json({
-            "servers_created": len(result.servers_created),
-            "tools_created": len(result.tools_created),
-            "total_servers_parsed": result.total_servers_parsed,
-            "total_tools_parsed": result.total_tools_parsed,
-            "servers_skipped": result.servers_skipped,
-            "tools_skipped": result.tools_skipped,
-            "server_names": [s.name for s in result.servers_created],
-            "tool_names": [t.name for t in result.tools_created],
-        })
-    else:
-        print(
-            f"Imported {len(result.servers_created)} servers, "
-            f"{len(result.tools_created)} tools"
+        _print_json(
+            {
+                "servers_created": len(result.servers_created),
+                "tools_created": len(result.tools_created),
+                "total_servers_parsed": result.total_servers_parsed,
+                "total_tools_parsed": result.total_tools_parsed,
+                "servers_skipped": result.servers_skipped,
+                "tools_skipped": result.tools_skipped,
+                "server_names": [s.name for s in result.servers_created],
+                "tool_names": [t.name for t in result.tools_created],
+            }
         )
+    else:
+        print(f"Imported {len(result.servers_created)} servers, {len(result.tools_created)} tools")
         print(f"  Servers skipped: {result.servers_skipped} (already exist)")
         print(f"  Tools skipped: {result.tools_skipped} (already exist)")
         print(f"  Total servers parsed: {result.total_servers_parsed}")
@@ -533,17 +534,18 @@ def _cmd_import_mcp_registry(args: argparse.Namespace) -> None:
         if result.tools_created:
             print("\nCreated tools:")
             for tool in result.tools_created:
-                desc = tool.description[:60] + "..." \
-                    if len(tool.description) > 60 else tool.description
+                desc = (
+                    tool.description[:60] + "..."
+                    if len(tool.description) > 60
+                    else tool.description
+                )
                 print(f"  - {tool.name}: {desc}")
 
 
 def _cmd_export_mcp_registry(args: argparse.Namespace) -> None:
     """Export MCP servers and tools in MCP registry-compatible JSON format."""
     client = _make_client()
-    result = asyncio.run(
-        client.export_mcp_registry(include_global=not args.no_global)
-    )
+    result = asyncio.run(client.export_mcp_registry(include_global=not args.no_global))
 
     if args.output:
         try:
@@ -580,18 +582,14 @@ def _cmd_set_credential(args: argparse.Namespace) -> None:
 def _cmd_list_credentials(args: argparse.Namespace) -> None:
     """List credentials for the current project."""
     client = _make_client()
-    cred_list = asyncio.run(
-        client.list_credentials(tool_definition_id=args.tool_id)
-    )
+    cred_list = asyncio.run(client.list_credentials(tool_definition_id=args.tool_id))
     _print_credential_table(cred_list, as_json=args.json)
 
 
 def _cmd_revoke_credential(args: argparse.Namespace) -> None:
     """Revoke a credential."""
     client = _make_client()
-    cred = asyncio.run(
-        client.revoke_credential(args.credential_id, args.version)
-    )
+    cred = asyncio.run(client.revoke_credential(args.credential_id, args.version))
     _print_credential_info(cred, as_json=args.json)
 
 
@@ -599,11 +597,11 @@ def _cmd_revoke_credential(args: argparse.Namespace) -> None:
 # MCP server subcommands
 # ---------------------------------------------------------------------------
 
+
 def _cmd_mcp_register(args: argparse.Namespace) -> None:
     """Register an MCP server."""
     client = _make_client()
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
-        if args.tags else None
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else None
 
     srv = asyncio.run(
         client.register_mcp_server(
@@ -620,12 +618,9 @@ def _cmd_mcp_register(args: argparse.Namespace) -> None:
 def _cmd_mcp_list(args: argparse.Namespace) -> None:
     """List MCP servers."""
     client = _make_client()
-    tags = [t.strip() for t in args.tags.split(",") if t.strip()] \
-        if args.tags else None
+    tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else None
 
-    srv_list = asyncio.run(
-        client.list_mcp_servers(status=args.status, tags=tags)
-    )
+    srv_list = asyncio.run(client.list_mcp_servers(status=args.status, tags=tags))
     _print_mcp_server_table(srv_list, as_json=args.json)
 
 
@@ -649,6 +644,7 @@ def _cmd_mcp_delete(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 # Parser construction
 # ---------------------------------------------------------------------------
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -675,7 +671,9 @@ def _build_parser() -> argparse.ArgumentParser:
     push_p.add_argument("--timeout-ms", type=int, default=30000, help="Timeout in ms.")
     push_p.add_argument("--memory-mb", type=int, default=256, help="Memory limit in MB.")
     push_p.add_argument(
-        "--scope", default="project", choices=["project", "global"],
+        "--scope",
+        default="project",
+        choices=["project", "global"],
         help="Tool scope.",
     )
 
@@ -686,7 +684,8 @@ def _build_parser() -> argparse.ArgumentParser:
     reg_p.add_argument("--description", default=None, help="Tool description.")
     reg_p.add_argument("--http-method", default="POST", help="HTTP method (default: POST).")
     reg_p.add_argument(
-        "--auth-type", default="none",
+        "--auth-type",
+        default="none",
         choices=["none", "api_key", "bearer", "oauth2"],
         help="Auth type.",
     )
@@ -702,7 +701,9 @@ def _build_parser() -> argparse.ArgumentParser:
     search_p = sub.add_parser("search", help="Semantic search for tools (natural language).")
     search_p.add_argument("query", help="Natural language search query.")
     search_p.add_argument(
-        "--top-k", type=int, default=10,
+        "--top-k",
+        type=int,
+        default=10,
         help="Maximum number of results (default: 10).",
     )
 
@@ -710,11 +711,15 @@ def _build_parser() -> argparse.ArgumentParser:
     list_p = sub.add_parser("list", help="List tools.")
     list_p.add_argument("--tags", default=None, help="Comma-separated tag filter.")
     list_p.add_argument(
-        "--type", default=None, choices=["hosted", "external", "mcp"],
+        "--type",
+        default=None,
+        choices=["hosted", "external", "mcp"],
         help="Filter by tool type.",
     )
     list_p.add_argument(
-        "--status", default=None, choices=["active", "building", "build_failed"],
+        "--status",
+        default=None,
+        choices=["active", "building", "build_failed"],
         help="Filter by status.",
     )
 
@@ -734,12 +739,15 @@ def _build_parser() -> argparse.ArgumentParser:
     io_p.add_argument("--base-url", default=None, help="Override base URL for endpoints.")
     io_p.add_argument("--tags", default=None, help="Comma-separated tags.")
     io_p.add_argument(
-        "--auth-type", default="none",
+        "--auth-type",
+        default="none",
         choices=["none", "api_key", "bearer", "oauth2"],
         help="Auth type for imported tools.",
     )
     io_p.add_argument(
-        "--scope", default="project", choices=["project", "global"],
+        "--scope",
+        default="project",
+        choices=["project", "global"],
         help="Scope for imported tools.",
     )
 
@@ -752,12 +760,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--registry-file", default=None, help="Local file path to MCP registry JSON."
     )
     imr_p.add_argument(
-        "--namespace", default=None,
+        "--namespace",
+        default=None,
         help="Optional prefix for tool names (e.g. 'acme').",
     )
     imr_p.add_argument("--tags", default=None, help="Comma-separated tags.")
     imr_p.add_argument(
-        "--scope", default="project", choices=["project", "global"],
+        "--scope",
+        default="project",
+        choices=["project", "global"],
         help="Scope for imported entries.",
     )
 
@@ -765,9 +776,13 @@ def _build_parser() -> argparse.ArgumentParser:
     emr_p = sub.add_parser(
         "export-mcp-registry", help="Export MCP servers and tools as registry JSON."
     )
-    emr_p.add_argument("--output", default=None, help="Output file path (prints to stdout if omitted).")
     emr_p.add_argument(
-        "--no-global", action="store_true", default=False,
+        "--output", default=None, help="Output file path (prints to stdout if omitted)."
+    )
+    emr_p.add_argument(
+        "--no-global",
+        action="store_true",
+        default=False,
         help="Exclude global-scoped tools.",
     )
 

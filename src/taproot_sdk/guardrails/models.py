@@ -7,7 +7,7 @@ Field names match the Guardrail-S Pydantic response models exactly
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -120,17 +120,13 @@ class GuardrailResponse:
     @classmethod
     def from_api_response(cls, data: dict[str, Any]) -> GuardrailResponse:
         """Parse a raw JSON dict into a typed GuardrailResponse."""
-        signals = tuple(
-            ScannerSignal.from_dict(s) for s in data.get("signals", [])
-        )
+        signals = tuple(ScannerSignal.from_dict(s) for s in data.get("signals", []))
         policy_signals = tuple(
             PolicySegmentResult.from_dict(p) for p in data.get("policy_signals", [])
         )
         raw_redactions = data.get("redactions")
         redactions = (
-            tuple(RedactionAction.from_dict(r) for r in raw_redactions)
-            if raw_redactions
-            else None
+            tuple(RedactionAction.from_dict(r) for r in raw_redactions) if raw_redactions else None
         )
         raw_reasons = data.get("block_reasons")
         block_reasons = tuple(raw_reasons) if raw_reasons else None

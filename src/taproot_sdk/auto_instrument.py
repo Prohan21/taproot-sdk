@@ -77,8 +77,7 @@ def setup_auto_instrumentation(libraries: list[str] | None = None) -> list[str]:
         instrumentor_path = INSTRUMENTORS.get(lib)
         if instrumentor_path is None:
             logger.warning(
-                f"Unknown library '{lib}'. "
-                f"Supported libraries: {', '.join(INSTRUMENTORS.keys())}"
+                f"Unknown library '{lib}'. Supported libraries: {', '.join(INSTRUMENTORS.keys())}"
             )
             continue
 
@@ -94,8 +93,7 @@ def setup_auto_instrumentation(libraries: list[str] | None = None) -> list[str]:
             # Library or instrumentor not installed - this is expected if the
             # user hasn't installed the optional dependency
             logger.debug(
-                f"Could not instrument '{lib}': {e}. "
-                f"Install with: pip install taproot-sdk[{lib}]"
+                f"Could not instrument '{lib}': {e}. Install with: pip install taproot-sdk[{lib}]"
             )
         except Exception as e:
             logger.warning(f"Failed to instrument '{lib}': {e}")
@@ -137,6 +135,7 @@ def uninstrument(libraries: list[str] | None = None) -> list[str]:
                 logger.debug(f"Uninstrumented: {lib}")
 
         except Exception as e:
+            _initialized_instrumentors.discard(lib)
             logger.warning(f"Failed to uninstrument '{lib}': {e}")
 
     return successfully_uninstrumented
@@ -186,6 +185,7 @@ def _load_instrumentor(instrumentor_path: str) -> Any | None:
 
         # Import the module
         import importlib
+
         module = importlib.import_module(module_path)
 
         # Get the instrumentor class
