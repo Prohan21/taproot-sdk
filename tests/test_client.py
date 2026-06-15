@@ -201,6 +201,18 @@ class TestTaprootInteractionPropagation:
             "traceparent": "00-trace-span-01",
         }
 
+    def test_parent_interaction_alias_maps_to_v1_parent_activity_header(self) -> None:
+        context = TaprootInteractionContext(
+            interaction_id="local-int",
+            parent_activity_id="upstream-int",
+        )
+
+        assert context.parent_interaction_id == "upstream-int"
+        assert (
+            propagation_headers(context)["X-Taproot-Parent-Activity-Id"]
+            == "upstream-int"
+        )
+
     def test_merge_propagation_headers_preserves_explicit_values(self) -> None:
         context = TaprootInteractionContext(
             interaction_id="int-new",
@@ -259,7 +271,7 @@ class TestTaprootInteractionPropagation:
         assert headers["X-Correlation-ID"] == "corr-explicit"
         assert headers["Idempotency-Key"] == "idem-1"
 
-    async def test_asgi_instrumentation_binds_inbound_tap38_headers_and_resets(self) -> None:
+    async def test_asgi_instrumentation_binds_inbound_interaction_as_parent_and_resets(self) -> None:
         observed: dict[str, Any] = {}
 
         async def app(scope: dict[str, Any], receive: Any, send: Any) -> None:
@@ -291,14 +303,14 @@ class TestTaprootInteractionPropagation:
         context = observed["context"]
         assert observed["correlation_id"] == "corr-1"
         assert context.interaction_id != "int-1"
-        assert context.interaction_type == "agent_run"
+        assert context.interaction_type == "sdk_operation"
         assert context.caller == TaprootActorRef(actor_type="user", actor_id="user-1")
         assert context.source_agent_id == "agent-1"
         assert context.root_agent_id == "root-agent"
         assert context.correlation_id == "corr-1"
         assert context.trace_id == "00-trace-span-01"
-        assert context.parent_activity_id == "act-parent"
-        assert context.parent_interaction_id == "int-parent"
+        assert context.parent_activity_id == "int-1"
+        assert context.parent_interaction_id == "int-1"
         assert correlation_id_var.get() is None
         assert get_interaction_context() is None
 

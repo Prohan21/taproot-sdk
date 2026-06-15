@@ -40,7 +40,11 @@ class TaprootActorRef:
 
 @dataclass(frozen=True)
 class TaprootInteractionContext:
-    """SDK-local TAP-38 interaction context for outbound header propagation."""
+    """SDK-local TAP-38 interaction context for outbound header propagation.
+
+    ``parent_activity_id`` is the v1 wire name for upstream parent interaction.
+    ``parent_interaction_id`` is accepted for clients using the newer name.
+    """
 
     interaction_id: str
     interaction_type: str = "sdk_operation"
@@ -52,8 +56,15 @@ class TaprootInteractionContext:
     parent_activity_id: str | None = None
     parent_interaction_id: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.parent_interaction_id is None and self.parent_activity_id is not None:
+            object.__setattr__(self, "parent_interaction_id", self.parent_activity_id)
+        if self.parent_activity_id is None and self.parent_interaction_id is not None:
+            object.__setattr__(self, "parent_activity_id", self.parent_interaction_id)
 
-correlation_id_var: ContextVar[str | None] = ContextVar("taproot_correlation_id", default=None)
+correlation_id_var: ContextVar[str | None] = ContextVar(
+    "taproot_correlation_id", default=None
+)
 
 interaction_context_var: ContextVar[TaprootInteractionContext | None] = ContextVar(
     "taproot_activity_interaction_context",
@@ -90,7 +101,10 @@ def clear_interaction_context() -> None:
 def propagation_headers(
     context: TaprootInteractionContext | None = None,
 ) -> dict[str, str]:
-    """Build outbound TAP-38 propagation headers for a context."""
+    """Build outbound TAP-38 propagation headers for a context.
+
+    ``HEADER_PARENT_ACTIVITY_ID`` carries parent-interaction semantics in v1.
+    """
 
     current = context or get_interaction_context()
     if current is None:
@@ -108,10 +122,10 @@ def propagation_headers(
         headers[HEADER_SOURCE_AGENT_ID] = current.source_agent_id
     if current.root_agent_id:
         headers[HEADER_ROOT_AGENT_ID] = current.root_agent_id
-    if current.parent_activity_id:
-        headers[HEADER_PARENT_ACTIVITY_ID] = current.parent_activity_id
-    # ponytail: legacy interaction header stays for mixed deploys; new receivers
-    # mint their own interaction and use this parent header for the tree edge.
+    upstream_parent = current.parent_activity_id or current.parent_interaction_id
+    if upstream_parent:
+        headers[HEADER_PARENT_ACTIVITY_ID] = upstream_parent
+    # ponytail: this caller's local interaction becomes the downstream parent.
     headers[HEADER_PARENT_INTERACTION_ID] = current.interaction_id
     if current.correlation_id:
         headers[HEADER_CORRELATION_ID] = current.correlation_id
