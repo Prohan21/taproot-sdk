@@ -32,6 +32,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from taproot_sdk._context import (
+    HEADER_CORRELATION_ID,
+    correlation_id_var,
+    merge_propagation_headers,
+)
 from taproot_sdk.core import get_config, is_initialized
 from taproot_sdk.evals.models import (
     AlertHistory,
@@ -226,6 +231,7 @@ class TaprootClient:
         """
         total_wait = 0.0
         r: httpx.Response | None = None
+        merged_headers = self._propagation_headers(headers)
 
         for attempt in range(_MAX_RETRIES + 1):
             kwargs: dict[str, Any] = {}
@@ -235,16 +241,7 @@ class TaprootClient:
                 kwargs["params"] = params
             if content is not None:
                 kwargs["content"] = content
-            merged_headers: dict[str, str] | None = headers
-            if self._agent_id:
-                merged_headers = {**(headers or {}), "X-Agent-Id": self._agent_id}
-            # Auto-propagate correlation ID from context (set by instrument_app
-            # middleware or manually in batch jobs)
-            from taproot_sdk._context import correlation_id_var
-            _cid = correlation_id_var.get(None)
-            if _cid:
-                merged_headers = {**(merged_headers or {}), "X-Correlation-ID": _cid}
-            if merged_headers is not None:
+            if merged_headers:
                 kwargs["headers"] = merged_headers
 
             try:
@@ -287,6 +284,20 @@ class TaprootClient:
         r._taproot_attempts = _MAX_RETRIES + 1  # type: ignore[attr-defined]
         r._taproot_total_wait = total_wait  # type: ignore[attr-defined]
         return r
+
+    def _propagation_headers(self, headers: dict[str, str] | None) -> dict[str, str]:
+        merged = dict(headers or {})
+        existing = {key.lower() for key in merged}
+
+        if self._agent_id and "x-agent-id" not in existing:
+            merged["X-Agent-Id"] = self._agent_id
+            existing.add("x-agent-id")
+
+        _cid = correlation_id_var.get(None)
+        if _cid and HEADER_CORRELATION_ID.lower() not in existing:
+            merged[HEADER_CORRELATION_ID] = _cid
+
+        return merge_propagation_headers(merged)
 
     def _raise_for_status(
         self,
@@ -1033,7 +1044,7 @@ class TaprootClient:
         return DocumentDetail.from_api_response(r.json())
 
     async def delete_document(self, store_name: str, doc_id: str) -> DocumentDeleted:
-        """Delete a document and all its chunks."""
+        """Soft-delete a logical document; retained chunks remain until retention purge."""
         r = await self._request(
             "DELETE", self._retrieval_path(f"/stores/{store_name}/documents/{doc_id}"),
             service="retrieval",
@@ -1045,7 +1056,6 @@ class TaprootClient:
         self,
         store_name: str,
         *,
-        doc_id: str,
         source_uri: str | None = None,
         signed_url: str | None = None,
         content_base64: str | None = None,
@@ -1060,7 +1070,6 @@ class TaprootClient:
         """Create a logical document through the registry-backed operation API."""
         idempotency_key = idempotency_key or str(uuid.uuid4())
         body: dict[str, Any] = {
-            "doc_id": doc_id,
             "source": self._document_source_payload(
                 source_uri=source_uri,
                 signed_url=signed_url,
@@ -1139,7 +1148,7 @@ class TaprootClient:
         filename: str | None = None,
         idempotency_key: str | None = None,
     ) -> DocumentOperationResult:
-        """Delete a logical document selected by doc_id or filename."""
+        """Soft-delete a logical document selected by doc_id or filename."""
         idempotency_key = idempotency_key or str(uuid.uuid4())
         selector: dict[str, str] = {}
         if doc_id is not None:

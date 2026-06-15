@@ -4,8 +4,8 @@ Provides ``instrument_app(app)`` — a single call that instruments an ASGI
 application (FastAPI / Starlette) for the Taproot platform.
 
 Currently bundles:
-- Correlation ID middleware (reads ``X-Correlation-ID`` from incoming
-  requests, stores in ``ContextVar`` for ``TaprootClient`` auto-propagation)
+- TAP-38 middleware (reads interaction and correlation headers from incoming
+  requests, stores them in ``ContextVar`` for ``TaprootClient`` propagation)
 
 Future additions (transparent to the developer):
 - Structlog request context binding
@@ -26,15 +26,28 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from taproot_sdk._context import correlation_id_var
+from taproot_sdk._context import (
+    HEADER_CALLER_ID,
+    HEADER_CALLER_TYPE,
+    HEADER_CORRELATION_ID,
+    HEADER_INTERACTION_ID,
+    HEADER_INTERACTION_TYPE,
+    HEADER_PARENT_ACTIVITY_ID,
+    HEADER_ROOT_AGENT_ID,
+    HEADER_SOURCE_AGENT_ID,
+    HEADER_TRACEPARENT,
+    TaprootActorRef,
+    TaprootInteractionContext,
+    correlation_id_var,
+    interaction_context_var,
+)
 
 
-class _CorrelationMiddleware:
-    """ASGI middleware that extracts ``X-Correlation-ID`` from incoming
-    request headers and stores it in a ``ContextVar``.
+class _TaprootContextMiddleware:
+    """ASGI middleware that binds inbound TAP-38 headers for one request.
 
-    If the header is absent, a new UUID is generated so that downstream
-    calls and OTLP traces are always correlated.
+    If the correlation header is absent, a new UUID is generated so that
+    downstream calls and OTLP traces are always correlated.
     """
 
     def __init__(self, app: Any) -> None:
@@ -45,16 +58,49 @@ class _CorrelationMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Extract correlation ID from headers
-        headers = dict(scope.get("headers", []))
-        cid_header = headers.get(b"x-correlation-id", b"").decode("utf-8", errors="ignore")
+        headers = {
+            key.decode("latin1").lower(): value.decode("utf-8", errors="ignore")
+            for key, value in scope.get("headers", [])
+        }
+
+        cid_header = headers.get(HEADER_CORRELATION_ID.lower(), "")
         cid = cid_header if cid_header else str(uuid.uuid4())
 
-        token = correlation_id_var.set(cid)
+        correlation_token = correlation_id_var.set(cid)
+        interaction_token = interaction_context_var.set(_context_from_headers(headers, cid))
         try:
             await self.app(scope, receive, send)
         finally:
-            correlation_id_var.reset(token)
+            interaction_context_var.reset(interaction_token)
+            correlation_id_var.reset(correlation_token)
+
+
+def _context_from_headers(
+    headers: dict[str, str],
+    correlation_id: str,
+) -> TaprootInteractionContext | None:
+    interaction_id = headers.get(HEADER_INTERACTION_ID.lower())
+    if not interaction_id:
+        return None
+
+    caller_id = headers.get(HEADER_CALLER_ID.lower())
+    caller_type = headers.get(HEADER_CALLER_TYPE.lower())
+    caller = (
+        TaprootActorRef(actor_type=caller_type, actor_id=caller_id)
+        if caller_id and caller_type
+        else None
+    )
+
+    return TaprootInteractionContext(
+        interaction_id=interaction_id,
+        interaction_type=headers.get(HEADER_INTERACTION_TYPE.lower(), "sdk_operation"),
+        caller=caller,
+        source_agent_id=headers.get(HEADER_SOURCE_AGENT_ID.lower()),
+        root_agent_id=headers.get(HEADER_ROOT_AGENT_ID.lower()),
+        correlation_id=correlation_id,
+        trace_id=headers.get(HEADER_TRACEPARENT.lower()),
+        parent_activity_id=headers.get(HEADER_PARENT_ACTIVITY_ID.lower()),
+    )
 
 
 def instrument_app(app: Any) -> None:
@@ -75,7 +121,7 @@ def instrument_app(app: Any) -> None:
     """
     # Starlette/FastAPI expose add_middleware for class-based middleware
     if hasattr(app, "add_middleware"):
-        app.add_middleware(_CorrelationMiddleware)
+        app.add_middleware(_TaprootContextMiddleware)
     else:
         raise TypeError(
             "instrument_app() requires a Starlette or FastAPI application. "

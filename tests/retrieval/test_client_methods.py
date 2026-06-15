@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -435,7 +436,6 @@ class TestDocumentOperations:
         c = _client()
         result = await c.create_document(
             "s",
-            doc_id="d-1",
             source_uri="s3://bucket/doc.pdf",
             idempotency_key="idem-1",
         )
@@ -443,8 +443,9 @@ class TestDocumentOperations:
         assert isinstance(result, DocumentOperationResult)
         assert result.operation == "create"
         assert result.job_id == "j-1"
+        assert result.doc_id == "d-1"
         assert route.calls[0].request.headers["Idempotency-Key"] == "idem-1"
-        assert b'"doc_id":"d-1"' in route.calls[0].request.content
+        assert "doc_id" not in json.loads(route.calls[0].request.content)
         assert b'"source_uri":"s3://bucket/doc.pdf"' in route.calls[0].request.content
 
     @respx.mock

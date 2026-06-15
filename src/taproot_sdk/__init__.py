@@ -25,10 +25,19 @@ Prompt management and serving:
     rendered = prompt.render(user_name="Alice")
 """
 
+from taproot_sdk._context import (
+    TaprootActorRef,
+    TaprootInteractionContext,
+    clear_interaction_context,
+    get_interaction_context,
+    merge_propagation_headers,
+    propagation_headers,
+    reset_interaction_context,
+    set_interaction_context,
+)
 from taproot_sdk.client import TaprootClient
 from taproot_sdk.core import get_tracer, init, is_initialized, shutdown
 from taproot_sdk.decorators import instrument
-from taproot_sdk.instrument import instrument_app
 from taproot_sdk.evals import (
     EvalAssertionError,
     EvalResult,
@@ -59,17 +68,8 @@ from taproot_sdk.guardrails import (
     ScannerOverride,
     ScannerSignal,
 )
+from taproot_sdk.instrument import instrument_app
 from taproot_sdk.prompts import MissingVariableError, PromptResponse
-from taproot_sdk.toolbox import (
-    CredentialInfo,
-    CredentialList,
-    ImportResult,
-    InvocationResult,
-    MCPServerInfo,
-    MCPServerList,
-    ToolInfo,
-    ToolList,
-)
 from taproot_sdk.retrieval import (
     AccessGrant,
     AccessGranted,
@@ -101,6 +101,16 @@ from taproot_sdk.retrieval import (
     StoreList,
     StoreStatistics,
 )
+from taproot_sdk.toolbox import (
+    CredentialInfo,
+    CredentialList,
+    ImportResult,
+    InvocationResult,
+    MCPServerInfo,
+    MCPServerList,
+    ToolInfo,
+    ToolList,
+)
 
 __version__ = "0.1.0"
 
@@ -116,6 +126,15 @@ __all__ = [
     "instrument",
     # App instrumentation
     "instrument_app",
+    # TAP-38 interaction propagation
+    "TaprootActorRef",
+    "TaprootInteractionContext",
+    "clear_interaction_context",
+    "get_interaction_context",
+    "merge_propagation_headers",
+    "propagation_headers",
+    "reset_interaction_context",
+    "set_interaction_context",
     # Exceptions
     "TaprootError",
     "TaprootAPIError",

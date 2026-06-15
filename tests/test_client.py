@@ -4,12 +4,24 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 
+from taproot_sdk._context import (
+    TaprootActorRef,
+    TaprootInteractionContext,
+    clear_interaction_context,
+    correlation_id_var,
+    get_interaction_context,
+    merge_propagation_headers,
+    propagation_headers,
+    reset_interaction_context,
+    set_interaction_context,
+)
 from taproot_sdk.client import TaprootClient
+from taproot_sdk.instrument import _TaprootContextMiddleware
 from taproot_sdk.prompts.models import PromptResponse, PromptType
 
 
@@ -159,6 +171,198 @@ class TestTaprootClientLifecycle:
     def test_missing_base_url_raises(self) -> None:
         with pytest.raises(ValueError, match="base_url is required"):
             TaprootClient(api_key="k", project_id="p")
+
+
+class TestTaprootInteractionPropagation:
+    def test_propagation_headers_include_tap38_context_fields(self) -> None:
+        headers = propagation_headers(
+            TaprootInteractionContext(
+                interaction_id="int-1",
+                interaction_type="agent_run",
+                caller=TaprootActorRef(actor_type="user", actor_id="user-1"),
+                source_agent_id="agent-1",
+                root_agent_id="root-agent",
+                correlation_id="corr-1",
+                trace_id="00-trace-span-01",
+                parent_activity_id="act-parent",
+            )
+        )
+
+        assert headers == {
+            "X-Taproot-Activity-Version": "1",
+            "X-Taproot-Interaction-Id": "int-1",
+            "X-Taproot-Interaction-Type": "agent_run",
+            "X-Taproot-Caller-Id": "user-1",
+            "X-Taproot-Caller-Type": "user",
+            "X-Taproot-Source-Agent-Id": "agent-1",
+            "X-Taproot-Root-Agent-Id": "root-agent",
+            "X-Taproot-Parent-Activity-Id": "act-parent",
+            "X-Correlation-ID": "corr-1",
+            "traceparent": "00-trace-span-01",
+        }
+
+    def test_merge_propagation_headers_preserves_explicit_values(self) -> None:
+        context = TaprootInteractionContext(
+            interaction_id="int-new",
+            interaction_type="agent_run",
+            correlation_id="corr-new",
+        )
+
+        merged = merge_propagation_headers(
+            {"x-taproot-interaction-id": "int-existing", "Authorization": "Bearer token"},
+            context=context,
+        )
+
+        assert merged["x-taproot-interaction-id"] == "int-existing"
+        assert merged["Authorization"] == "Bearer token"
+        assert merged["X-Taproot-Interaction-Type"] == "agent_run"
+        assert merged["X-Correlation-ID"] == "corr-new"
+
+    async def test_taproot_client_propagates_current_context_without_overwriting_headers(self) -> None:
+        client = TaprootClient(
+            base_url="https://api.test",
+            api_key="k",
+            project_id="p",
+            agent_id="agent-sdk",
+        )
+        client._http = AsyncMock()
+        client._http.request.return_value = httpx.Response(status_code=200)
+
+        token = set_interaction_context(
+            TaprootInteractionContext(
+                interaction_id="int-1",
+                interaction_type="agent_run",
+                caller=TaprootActorRef(actor_type="user", actor_id="user-1"),
+                correlation_id="corr-context",
+            )
+        )
+        try:
+            await client._request(
+                "GET",
+                "/v1/test",
+                headers={"X-Correlation-ID": "corr-explicit", "Idempotency-Key": "idem-1"},
+            )
+        finally:
+            reset_interaction_context(token)
+            clear_interaction_context()
+
+        _, _, kwargs = client._http.request.mock_calls[0]
+        headers = kwargs["headers"]
+        assert headers["X-Taproot-Interaction-Id"] == "int-1"
+        assert headers["X-Taproot-Interaction-Type"] == "agent_run"
+        assert headers["X-Taproot-Caller-Id"] == "user-1"
+        assert headers["X-Agent-Id"] == "agent-sdk"
+        assert headers["X-Correlation-ID"] == "corr-explicit"
+        assert headers["Idempotency-Key"] == "idem-1"
+
+    async def test_asgi_instrumentation_binds_inbound_tap38_headers_and_resets(self) -> None:
+        observed: dict[str, Any] = {}
+
+        async def app(scope: dict[str, Any], receive: Any, send: Any) -> None:
+            observed["correlation_id"] = correlation_id_var.get()
+            observed["context"] = get_interaction_context()
+
+        middleware = _TaprootContextMiddleware(app)
+
+        await middleware(
+            {
+                "type": "http",
+                "headers": [
+                    (b"x-taproot-interaction-id", b"int-1"),
+                    (b"x-taproot-interaction-type", b"agent_run"),
+                    (b"x-taproot-caller-id", b"user-1"),
+                    (b"x-taproot-caller-type", b"user"),
+                    (b"x-taproot-source-agent-id", b"agent-1"),
+                    (b"x-taproot-root-agent-id", b"root-agent"),
+                    (b"x-taproot-parent-activity-id", b"act-parent"),
+                    (b"x-correlation-id", b"corr-1"),
+                    (b"traceparent", b"00-trace-span-01"),
+                ],
+            },
+            None,
+            None,
+        )
+
+        context = observed["context"]
+        assert observed["correlation_id"] == "corr-1"
+        assert context == TaprootInteractionContext(
+            interaction_id="int-1",
+            interaction_type="agent_run",
+            caller=TaprootActorRef(actor_type="user", actor_id="user-1"),
+            source_agent_id="agent-1",
+            root_agent_id="root-agent",
+            correlation_id="corr-1",
+            trace_id="00-trace-span-01",
+            parent_activity_id="act-parent",
+        )
+        assert correlation_id_var.get() is None
+        assert get_interaction_context() is None
+
+    async def test_retry_headers_are_stable_across_attempts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = TaprootClient(
+            base_url="https://api.test",
+            api_key="k",
+            project_id="p",
+            agent_id="agent-sdk",
+        )
+        client._http = AsyncMock()
+        monkeypatch.setattr("taproot_sdk.client.asyncio.sleep", AsyncMock())
+
+        call_count = 0
+
+        async def request(*args: Any, **kwargs: Any) -> httpx.Response:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                clear_interaction_context()
+                set_interaction_context(
+                    TaprootInteractionContext(
+                        interaction_id="int-mutated",
+                        interaction_type="tool_call",
+                        correlation_id="corr-mutated",
+                    )
+                )
+                return httpx.Response(status_code=503)
+            return httpx.Response(status_code=200)
+
+        client._http.request.side_effect = request
+        token = set_interaction_context(
+            TaprootInteractionContext(
+                interaction_id="int-1",
+                interaction_type="agent_run",
+                caller=TaprootActorRef(actor_type="user", actor_id="user-1"),
+                correlation_id="corr-context",
+            )
+        )
+        try:
+            await client._request(
+                "POST",
+                "/v1/test",
+                json={"value": 1},
+                headers={
+                    "Authorization": "Bearer token",
+                    "x-api-key": "auth-explicit",
+                    "X-Correlation-ID": "corr-explicit",
+                    "Idempotency-Key": "idem-1",
+                    "X-Taproot-Caller-Id": "caller-explicit",
+                },
+            )
+        finally:
+            reset_interaction_context(token)
+            clear_interaction_context()
+
+        first_headers = client._http.request.mock_calls[0].kwargs["headers"]
+        second_headers = client._http.request.mock_calls[1].kwargs["headers"]
+        assert first_headers == second_headers
+        assert first_headers["X-Taproot-Interaction-Id"] == "int-1"
+        assert first_headers["X-Taproot-Interaction-Type"] == "agent_run"
+        assert first_headers["X-Taproot-Caller-Id"] == "caller-explicit"
+        assert first_headers["X-Taproot-Caller-Type"] == "user"
+        assert first_headers["X-Agent-Id"] == "agent-sdk"
+        assert first_headers["X-Correlation-ID"] == "corr-explicit"
+        assert first_headers["Idempotency-Key"] == "idem-1"
+        assert first_headers["Authorization"] == "Bearer token"
+        assert first_headers["x-api-key"] == "auth-explicit"
 
 
 class TestPromptClientLifecycle:
