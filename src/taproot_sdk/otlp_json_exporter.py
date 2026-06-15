@@ -15,11 +15,15 @@ import base64
 import gzip
 import json
 import logging
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 import httpx
-from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from opentelemetry.sdk.trace import ReadableSpan
 
 logger = logging.getLogger(__name__)
 
@@ -108,16 +112,14 @@ class JsonOtlpSpanExporter(SpanExporter):
         Uses the OTel protobuf encoder to build the canonical message,
         then converts to a JSON-compatible dict with hex-encoded IDs.
         """
-        from google.protobuf.json_format import MessageToDict
+        from google.protobuf.json_format import MessageToDict  # type: ignore[import-untyped]
         from opentelemetry.exporter.otlp.proto.common._internal.trace_encoder import (
             encode_spans,
         )
 
         # encode_spans returns an ExportTraceServiceRequest protobuf message
         message = encode_spans(spans)
-        data: dict[str, Any] = MessageToDict(
-            message, preserving_proto_field_name=False
-        )
+        data: dict[str, Any] = MessageToDict(message, preserving_proto_field_name=False)
 
         # MessageToDict encodes bytes fields as base64.
         # OTLP JSON spec requires trace/span IDs as lowercase hex strings.

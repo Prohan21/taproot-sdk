@@ -22,7 +22,6 @@ from taproot_sdk.toolbox.models import (
     ToolList,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -74,36 +73,53 @@ def _fake_tool_list(tools: list[ToolInfo] | None = None) -> ToolList:
 # push command
 # ---------------------------------------------------------------------------
 
+
 class TestPushCommand:
     """Tests for ``taproot-tools push``."""
 
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_push_reads_file_and_calls_push_tool(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.push_tool = AsyncMock(return_value=_fake_tool())
         mock_make_client.return_value = client
 
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False, encoding="utf-8",
+            mode="w",
+            suffix=".py",
+            delete=False,
+            encoding="utf-8",
         ) as f:
             f.write("def run(x): return x + 1\n")
             tmp_path = f.name
 
         try:
-            main([
-                "push", tmp_path,
-                "--name", "my_tool",
-                "--entry-point", "run",
-                "--description", "adds one",
-                "--requirements", "numpy,pandas>=2",
-                "--tags", "math,utils",
-                "--timeout-ms", "5000",
-                "--memory-mb", "512",
-                "--scope", "global",
-            ])
+            main(
+                [
+                    "push",
+                    tmp_path,
+                    "--name",
+                    "my_tool",
+                    "--entry-point",
+                    "run",
+                    "--description",
+                    "adds one",
+                    "--requirements",
+                    "numpy,pandas>=2",
+                    "--tags",
+                    "math,utils",
+                    "--timeout-ms",
+                    "5000",
+                    "--memory-mb",
+                    "512",
+                    "--scope",
+                    "global",
+                ]
+            )
         finally:
             os.unlink(tmp_path)
 
@@ -125,23 +141,35 @@ class TestPushCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_push_json_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.push_tool = AsyncMock(return_value=_fake_tool())
         mock_make_client.return_value = client
 
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False, encoding="utf-8",
+            mode="w",
+            suffix=".py",
+            delete=False,
+            encoding="utf-8",
         ) as f:
             f.write("def run(x): return x\n")
             tmp_path = f.name
 
         try:
-            main([
-                "--json", "push", tmp_path,
-                "--name", "my_tool", "--entry-point", "run",
-            ])
+            main(
+                [
+                    "--json",
+                    "push",
+                    tmp_path,
+                    "--name",
+                    "my_tool",
+                    "--entry-point",
+                    "run",
+                ]
+            )
         finally:
             os.unlink(tmp_path)
 
@@ -161,23 +189,32 @@ class TestPushCommand:
 # register command
 # ---------------------------------------------------------------------------
 
+
 class TestRegisterCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_register_calls_register_tool(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         tool = _fake_tool(tool_type="external", endpoint_url="https://ext.example.com/run")
         client = MagicMock()
         client.register_tool = AsyncMock(return_value=tool)
         mock_make_client.return_value = client
 
-        main([
-            "register", "ext_tool",
-            "--endpoint-url", "https://ext.example.com/run",
-            "--auth-type", "bearer",
-            "--tags", "api",
-        ])
+        main(
+            [
+                "register",
+                "ext_tool",
+                "--endpoint-url",
+                "https://ext.example.com/run",
+                "--auth-type",
+                "bearer",
+                "--tags",
+                "api",
+            ]
+        )
 
         client.register_tool.assert_awaited_once()
         kw = client.register_tool.call_args.kwargs
@@ -190,11 +227,14 @@ class TestRegisterCommand:
 # invoke command
 # ---------------------------------------------------------------------------
 
+
 class TestInvokeCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_invoke_with_inline_json(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.invoke_tool = AsyncMock(return_value=_fake_invocation())
@@ -210,14 +250,19 @@ class TestInvokeCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_invoke_with_input_file(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.invoke_tool = AsyncMock(return_value=_fake_invocation())
         mock_make_client.return_value = client
 
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8",
+            mode="w",
+            suffix=".json",
+            delete=False,
+            encoding="utf-8",
         ) as f:
             json.dump({"x": 99}, f)
             tmp_path = f.name
@@ -232,7 +277,9 @@ class TestInvokeCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_invoke_json_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.invoke_tool = AsyncMock(return_value=_fake_invocation())
@@ -247,7 +294,9 @@ class TestInvokeCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_invoke_failed_result(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         inv = _fake_invocation(success=False, error="timeout", result=None)
         client = MagicMock()
@@ -277,11 +326,14 @@ class TestInvokeCommand:
 # list command
 # ---------------------------------------------------------------------------
 
+
 class TestListCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_table_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         tools = [
             _fake_tool(id="aaa", name="tool_a"),
@@ -306,7 +358,9 @@ class TestListCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_empty(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_tools = AsyncMock(
@@ -321,7 +375,9 @@ class TestListCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_json_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_tools = AsyncMock(return_value=_fake_tool_list())
@@ -338,11 +394,14 @@ class TestListCommand:
 # get command
 # ---------------------------------------------------------------------------
 
+
 class TestGetCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_get_prints_tool(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.get_tool = AsyncMock(return_value=_fake_tool())
@@ -360,11 +419,14 @@ class TestGetCommand:
 # delete command
 # ---------------------------------------------------------------------------
 
+
 class TestDeleteCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_delete_prints_confirmation(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.delete_tool = AsyncMock(return_value=None)
@@ -378,7 +440,9 @@ class TestDeleteCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_delete_json_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.delete_tool = AsyncMock(return_value=None)
@@ -394,12 +458,18 @@ class TestDeleteCommand:
 # import-openapi command
 # ---------------------------------------------------------------------------
 
+
 def _fake_import_result(**overrides: Any) -> ImportResult:
-    tools = overrides.pop("tools_created", (_fake_tool(
-        name="petstore_listPets",
-        tool_type="external",
-        endpoint_url="https://petstore.example.com/pets",
-    ),))
+    tools = overrides.pop(
+        "tools_created",
+        (
+            _fake_tool(
+                name="petstore_listPets",
+                tool_type="external",
+                endpoint_url="https://petstore.example.com/pets",
+            ),
+        ),
+    )
     defaults: dict[str, Any] = {
         "tools_created": tools,
         "tools_skipped": 0,
@@ -414,17 +484,23 @@ class TestImportOpenAPICommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_with_spec_url(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.import_openapi = AsyncMock(return_value=_fake_import_result())
         mock_make_client.return_value = client
 
-        main([
-            "import-openapi",
-            "--namespace", "petstore",
-            "--spec-url", "https://petstore.swagger.io/v3/openapi.json",
-        ])
+        main(
+            [
+                "import-openapi",
+                "--namespace",
+                "petstore",
+                "--spec-url",
+                "https://petstore.swagger.io/v3/openapi.json",
+            ]
+        )
 
         client.import_openapi.assert_awaited_once()
         kw = client.import_openapi.call_args.kwargs
@@ -439,24 +515,33 @@ class TestImportOpenAPICommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_with_spec_file(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.import_openapi = AsyncMock(return_value=_fake_import_result())
         mock_make_client.return_value = client
 
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8",
+            mode="w",
+            suffix=".json",
+            delete=False,
+            encoding="utf-8",
         ) as f:
             json.dump({"openapi": "3.0.0", "paths": {}}, f)
             tmp_path = f.name
 
         try:
-            main([
-                "import-openapi",
-                "--namespace", "petstore",
-                "--spec-file", tmp_path,
-            ])
+            main(
+                [
+                    "import-openapi",
+                    "--namespace",
+                    "petstore",
+                    "--spec-file",
+                    tmp_path,
+                ]
+            )
         finally:
             os.unlink(tmp_path)
 
@@ -467,20 +552,29 @@ class TestImportOpenAPICommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_json_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
-        client.import_openapi = AsyncMock(return_value=_fake_import_result(
-            tools_skipped=2,
-            total_parsed=3,
-        ))
+        client.import_openapi = AsyncMock(
+            return_value=_fake_import_result(
+                tools_skipped=2,
+                total_parsed=3,
+            )
+        )
         mock_make_client.return_value = client
 
-        main([
-            "--json", "import-openapi",
-            "--namespace", "petstore",
-            "--spec-url", "https://example.com/spec.json",
-        ])
+        main(
+            [
+                "--json",
+                "import-openapi",
+                "--namespace",
+                "petstore",
+                "--spec-url",
+                "https://example.com/spec.json",
+            ]
+        )
 
         data = json.loads(capsys.readouterr().out)
         assert data["tools_created"] == 1
@@ -492,21 +586,31 @@ class TestImportOpenAPICommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_with_all_options(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.import_openapi = AsyncMock(return_value=_fake_import_result())
         mock_make_client.return_value = client
 
-        main([
-            "import-openapi",
-            "--namespace", "stripe",
-            "--spec-url", "https://stripe.com/spec.json",
-            "--base-url", "https://api.stripe.com/v1",
-            "--tags", "payments,billing",
-            "--auth-type", "bearer",
-            "--scope", "global",
-        ])
+        main(
+            [
+                "import-openapi",
+                "--namespace",
+                "stripe",
+                "--spec-url",
+                "https://stripe.com/spec.json",
+                "--base-url",
+                "https://api.stripe.com/v1",
+                "--tags",
+                "payments,billing",
+                "--auth-type",
+                "bearer",
+                "--scope",
+                "global",
+            ]
+        )
 
         kw = client.import_openapi.call_args.kwargs
         assert kw["namespace"] == "stripe"
@@ -525,17 +629,23 @@ class TestImportOpenAPICommand:
     @patch.dict(os.environ, _ENV, clear=False)
     def test_import_spec_file_not_found(self) -> None:
         with pytest.raises(SystemExit) as exc_info:
-            main([
-                "import-openapi",
-                "--namespace", "test",
-                "--spec-file", "/nonexistent/spec.json",
-            ])
+            main(
+                [
+                    "import-openapi",
+                    "--namespace",
+                    "test",
+                    "--spec-file",
+                    "/nonexistent/spec.json",
+                ]
+            )
         assert exc_info.value.code == 1
 
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_empty_result(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         result = ImportResult(
             tools_created=(),
@@ -547,11 +657,15 @@ class TestImportOpenAPICommand:
         client.import_openapi = AsyncMock(return_value=result)
         mock_make_client.return_value = client
 
-        main([
-            "import-openapi",
-            "--namespace", "empty",
-            "--spec-url", "https://example.com/spec.json",
-        ])
+        main(
+            [
+                "import-openapi",
+                "--namespace",
+                "empty",
+                "--spec-url",
+                "https://example.com/spec.json",
+            ]
+        )
 
         out = capsys.readouterr().out
         assert "Imported 0 tools" in out
@@ -561,6 +675,7 @@ class TestImportOpenAPICommand:
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 class TestErrorHandling:
     def test_missing_env_var_base_url(self) -> None:
@@ -590,7 +705,8 @@ class TestErrorHandling:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_connection_error(
-        self, mock_make_client: MagicMock,
+        self,
+        mock_make_client: MagicMock,
     ) -> None:
         client = MagicMock()
         client.list_tools = AsyncMock(side_effect=ConnectionError("refused"))
@@ -609,6 +725,7 @@ class TestErrorHandling:
 # ---------------------------------------------------------------------------
 # Credential helpers
 # ---------------------------------------------------------------------------
+
 
 def _fake_credential(**overrides: Any) -> CredentialInfo:
     defaults: dict[str, Any] = {
@@ -659,23 +776,32 @@ def _fake_mcp_server_list(
 # set-credential command
 # ---------------------------------------------------------------------------
 
+
 class TestSetCredentialCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_set_credential(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.set_tool_credential = AsyncMock(return_value=_fake_credential())
         mock_make_client.return_value = client
 
-        main([
-            "set-credential",
-            "--tool-id", "tool-001",
-            "--type", "api_key",
-            "--name", "My Key",
-            "--payload", '{"key": "secret-value"}',
-        ])
+        main(
+            [
+                "set-credential",
+                "--tool-id",
+                "tool-001",
+                "--type",
+                "api_key",
+                "--name",
+                "My Key",
+                "--payload",
+                '{"key": "secret-value"}',
+            ]
+        )
 
         client.set_tool_credential.assert_awaited_once()
         kw = client.set_tool_credential.call_args.kwargs
@@ -691,19 +817,28 @@ class TestSetCredentialCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_set_credential_json_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.set_tool_credential = AsyncMock(return_value=_fake_credential())
         mock_make_client.return_value = client
 
-        main([
-            "--json", "set-credential",
-            "--tool-id", "tool-001",
-            "--type", "api_key",
-            "--name", "My Key",
-            "--payload", '{"key": "val"}',
-        ])
+        main(
+            [
+                "--json",
+                "set-credential",
+                "--tool-id",
+                "tool-001",
+                "--type",
+                "api_key",
+                "--name",
+                "My Key",
+                "--payload",
+                '{"key": "val"}',
+            ]
+        )
 
         data = json.loads(capsys.readouterr().out)
         assert data["id"] == "cred-001"
@@ -712,13 +847,19 @@ class TestSetCredentialCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     def test_set_credential_invalid_payload(self) -> None:
         with pytest.raises(SystemExit) as exc_info:
-            main([
-                "set-credential",
-                "--tool-id", "t",
-                "--type", "api_key",
-                "--name", "k",
-                "--payload", "not-json",
-            ])
+            main(
+                [
+                    "set-credential",
+                    "--tool-id",
+                    "t",
+                    "--type",
+                    "api_key",
+                    "--name",
+                    "k",
+                    "--payload",
+                    "not-json",
+                ]
+            )
         assert exc_info.value.code == 1
 
 
@@ -726,11 +867,14 @@ class TestSetCredentialCommand:
 # list-credentials command
 # ---------------------------------------------------------------------------
 
+
 class TestListCredentialsCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_credentials_table(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_credentials = AsyncMock(return_value=_fake_credential_list())
@@ -745,7 +889,9 @@ class TestListCredentialsCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_credentials_with_tool_filter(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_credentials = AsyncMock(return_value=_fake_credential_list())
@@ -758,7 +904,9 @@ class TestListCredentialsCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_credentials_empty(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         empty = CredentialList(credentials=(), project_id="proj-1", count=0)
         client = MagicMock()
@@ -772,7 +920,9 @@ class TestListCredentialsCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_credentials_json(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_credentials = AsyncMock(return_value=_fake_credential_list())
@@ -788,11 +938,14 @@ class TestListCredentialsCommand:
 # revoke-credential command
 # ---------------------------------------------------------------------------
 
+
 class TestRevokeCredentialCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_revoke_credential(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         revoked = _fake_credential(status="revoked", version=2)
         client = MagicMock()
@@ -810,24 +963,34 @@ class TestRevokeCredentialCommand:
 # mcp-register command
 # ---------------------------------------------------------------------------
 
+
 class TestMCPRegisterCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_register(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.register_mcp_server = AsyncMock(return_value=_fake_mcp_server())
         mock_make_client.return_value = client
 
-        main([
-            "mcp-register",
-            "--name", "My Server",
-            "--transport", "sse",
-            "--url", "https://mcp.example.com",
-            "--description", "Test",
-            "--tags", "prod,search",
-        ])
+        main(
+            [
+                "mcp-register",
+                "--name",
+                "My Server",
+                "--transport",
+                "sse",
+                "--url",
+                "https://mcp.example.com",
+                "--description",
+                "Test",
+                "--tags",
+                "prod,search",
+            ]
+        )
 
         client.register_mcp_server.assert_awaited_once()
         kw = client.register_mcp_server.call_args.kwargs
@@ -842,18 +1005,26 @@ class TestMCPRegisterCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_register_json(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.register_mcp_server = AsyncMock(return_value=_fake_mcp_server())
         mock_make_client.return_value = client
 
-        main([
-            "--json", "mcp-register",
-            "--name", "My Server",
-            "--transport", "sse",
-            "--url", "https://mcp.example.com",
-        ])
+        main(
+            [
+                "--json",
+                "mcp-register",
+                "--name",
+                "My Server",
+                "--transport",
+                "sse",
+                "--url",
+                "https://mcp.example.com",
+            ]
+        )
 
         data = json.loads(capsys.readouterr().out)
         assert data["id"] == "srv-001"
@@ -863,11 +1034,14 @@ class TestMCPRegisterCommand:
 # mcp-list command
 # ---------------------------------------------------------------------------
 
+
 class TestMCPListCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_table(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_mcp_servers = AsyncMock(return_value=_fake_mcp_server_list())
@@ -882,7 +1056,9 @@ class TestMCPListCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_empty(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         empty = MCPServerList(servers=(), project_id="proj-1", count=0)
         client = MagicMock()
@@ -896,7 +1072,9 @@ class TestMCPListCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_json(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_mcp_servers = AsyncMock(return_value=_fake_mcp_server_list())
@@ -910,7 +1088,9 @@ class TestMCPListCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_list_with_filters(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.list_mcp_servers = AsyncMock(return_value=_fake_mcp_server_list())
@@ -927,11 +1107,14 @@ class TestMCPListCommand:
 # mcp-get command
 # ---------------------------------------------------------------------------
 
+
 class TestMCPGetCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_get(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.get_mcp_server = AsyncMock(return_value=_fake_mcp_server())
@@ -949,11 +1132,14 @@ class TestMCPGetCommand:
 # mcp-delete command
 # ---------------------------------------------------------------------------
 
+
 class TestMCPDeleteCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_delete(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.delete_mcp_server = AsyncMock(return_value=None)
@@ -967,7 +1153,9 @@ class TestMCPDeleteCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_delete_json(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.delete_mcp_server = AsyncMock(return_value=None)
@@ -984,14 +1172,13 @@ class TestMCPDeleteCommand:
 # MCP Registry Import/Export helpers
 # ---------------------------------------------------------------------------
 
+
 def _fake_mcp_registry_import_result(**overrides: Any) -> Any:
     from taproot_sdk.toolbox.models import MCPRegistryImportResult
 
     defaults: dict[str, Any] = {
         "servers_created": (_fake_mcp_server(),),
-        "tools_created": (
-            _fake_tool(name="search_server_web_search", tool_type="mcp"),
-        ),
+        "tools_created": (_fake_tool(name="search_server_web_search", tool_type="mcp"),),
         "total_servers_parsed": 1,
         "total_tools_parsed": 1,
         "servers_skipped": 0,
@@ -1005,22 +1192,26 @@ def _fake_mcp_registry_import_result(**overrides: Any) -> Any:
 # import-mcp-registry command
 # ---------------------------------------------------------------------------
 
+
 class TestImportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_with_registry_url(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
-        client.import_mcp_registry = AsyncMock(
-            return_value=_fake_mcp_registry_import_result()
-        )
+        client.import_mcp_registry = AsyncMock(return_value=_fake_mcp_registry_import_result())
         mock_make_client.return_value = client
 
-        main([
-            "import-mcp-registry",
-            "--registry-url", "https://registry.example.com/mcp.json",
-        ])
+        main(
+            [
+                "import-mcp-registry",
+                "--registry-url",
+                "https://registry.example.com/mcp.json",
+            ]
+        )
 
         client.import_mcp_registry.assert_awaited_once()
         kw = client.import_mcp_registry.call_args.kwargs
@@ -1033,25 +1224,31 @@ class TestImportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_with_registry_file(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
-        client.import_mcp_registry = AsyncMock(
-            return_value=_fake_mcp_registry_import_result()
-        )
+        client.import_mcp_registry = AsyncMock(return_value=_fake_mcp_registry_import_result())
         mock_make_client.return_value = client
 
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8",
+            mode="w",
+            suffix=".json",
+            delete=False,
+            encoding="utf-8",
         ) as f:
             json.dump({"servers": []}, f)
             tmp_path = f.name
 
         try:
-            main([
-                "import-mcp-registry",
-                "--registry-file", tmp_path,
-            ])
+            main(
+                [
+                    "import-mcp-registry",
+                    "--registry-file",
+                    tmp_path,
+                ]
+            )
         finally:
             os.unlink(tmp_path)
 
@@ -1062,7 +1259,9 @@ class TestImportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_json_output(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.import_mcp_registry = AsyncMock(
@@ -1075,10 +1274,14 @@ class TestImportMCPRegistryCommand:
         )
         mock_make_client.return_value = client
 
-        main([
-            "--json", "import-mcp-registry",
-            "--registry-url", "https://example.com/mcp.json",
-        ])
+        main(
+            [
+                "--json",
+                "import-mcp-registry",
+                "--registry-url",
+                "https://example.com/mcp.json",
+            ]
+        )
 
         data = json.loads(capsys.readouterr().out)
         assert data["servers_created"] == 1
@@ -1091,21 +1294,27 @@ class TestImportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_import_with_all_options(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
-        client.import_mcp_registry = AsyncMock(
-            return_value=_fake_mcp_registry_import_result()
-        )
+        client.import_mcp_registry = AsyncMock(return_value=_fake_mcp_registry_import_result())
         mock_make_client.return_value = client
 
-        main([
-            "import-mcp-registry",
-            "--registry-url", "https://registry.example.com/mcp.json",
-            "--namespace", "acme",
-            "--tags", "imported,test",
-            "--scope", "global",
-        ])
+        main(
+            [
+                "import-mcp-registry",
+                "--registry-url",
+                "https://registry.example.com/mcp.json",
+                "--namespace",
+                "acme",
+                "--tags",
+                "imported,test",
+                "--scope",
+                "global",
+            ]
+        )
 
         kw = client.import_mcp_registry.call_args.kwargs
         assert kw["namespace"] == "acme"
@@ -1122,10 +1331,13 @@ class TestImportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     def test_import_registry_file_not_found(self) -> None:
         with pytest.raises(SystemExit) as exc_info:
-            main([
-                "import-mcp-registry",
-                "--registry-file", "/nonexistent/registry.json",
-            ])
+            main(
+                [
+                    "import-mcp-registry",
+                    "--registry-file",
+                    "/nonexistent/registry.json",
+                ]
+            )
         assert exc_info.value.code == 1
 
 
@@ -1133,11 +1345,14 @@ class TestImportMCPRegistryCommand:
 # export-mcp-registry command
 # ---------------------------------------------------------------------------
 
+
 class TestExportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_export_to_stdout(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         exported = {"servers": [{"name": "test", "url": "https://test.com"}]}
         client = MagicMock()
@@ -1153,7 +1368,9 @@ class TestExportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_export_to_file(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         exported = {"servers": [{"name": "test", "url": "https://test.com"}]}
         client = MagicMock()
@@ -1161,7 +1378,10 @@ class TestExportMCPRegistryCommand:
         mock_make_client.return_value = client
 
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8",
+            mode="w",
+            suffix=".json",
+            delete=False,
+            encoding="utf-8",
         ) as f:
             tmp_path = f.name
 
@@ -1178,7 +1398,9 @@ class TestExportMCPRegistryCommand:
     @patch.dict(os.environ, _ENV, clear=False)
     @patch("taproot_sdk.toolbox.cli._make_client")
     def test_export_no_global(
-        self, mock_make_client: MagicMock, capsys: pytest.CaptureFixture[str],
+        self,
+        mock_make_client: MagicMock,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         client = MagicMock()
         client.export_mcp_registry = AsyncMock(return_value={"servers": []})

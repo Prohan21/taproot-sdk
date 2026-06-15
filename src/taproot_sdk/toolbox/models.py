@@ -7,8 +7,7 @@ Field names match the ToolBox-S Pydantic response models exactly
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -187,8 +186,7 @@ class CredentialList:
     def from_api_response(cls, data: dict[str, Any]) -> CredentialList:
         return cls(
             credentials=tuple(
-                CredentialInfo.from_api_response(c)
-                for c in data.get("credentials", [])
+                CredentialInfo.from_api_response(c) for c in data.get("credentials", [])
             ),
             project_id=data["project_id"],
             count=data.get("count", 0),
@@ -292,9 +290,7 @@ class UsageReport:
     def from_api_response(cls, data: dict[str, Any]) -> UsageReport:
         return cls(
             project_id=data["project_id"],
-            tools=tuple(
-                ToolUsageStats.from_api_response(t) for t in data.get("tools", [])
-            ),
+            tools=tuple(ToolUsageStats.from_api_response(t) for t in data.get("tools", [])),
             count=data.get("count", 0),
         )
 
@@ -314,12 +310,10 @@ class MCPRegistryImportResult:
     def from_api_response(cls, data: dict[str, Any]) -> MCPRegistryImportResult:
         return cls(
             servers_created=tuple(
-                MCPServerInfo.from_api_response(s)
-                for s in data.get("servers_created", [])
+                MCPServerInfo.from_api_response(s) for s in data.get("servers_created", [])
             ),
             tools_created=tuple(
-                ToolInfo.from_api_response(t)
-                for t in data.get("tools_created", [])
+                ToolInfo.from_api_response(t) for t in data.get("tools_created", [])
             ),
             total_servers_parsed=data.get("total_servers_parsed", 0),
             total_tools_parsed=data.get("total_tools_parsed", 0),
@@ -381,10 +375,7 @@ class MCPServerList:
     @classmethod
     def from_api_response(cls, data: dict[str, Any]) -> MCPServerList:
         return cls(
-            servers=tuple(
-                MCPServerInfo.from_api_response(s)
-                for s in data.get("servers", [])
-            ),
+            servers=tuple(MCPServerInfo.from_api_response(s) for s in data.get("servers", [])),
             project_id=data["project_id"],
             count=data.get("count", 0),
         )

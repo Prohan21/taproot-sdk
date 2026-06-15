@@ -10,7 +10,7 @@ import pytest
 import respx
 
 from taproot_sdk.client import TaprootClient
-from taproot_sdk.toolbox.models import UsageReport, ToolUsageStats
+from taproot_sdk.toolbox.models import ToolUsageStats, UsageReport
 
 BASE = "https://gateway.test"
 
@@ -60,9 +60,9 @@ class TestGetUsageReport:
     @respx.mock
     @pytest.mark.asyncio
     async def test_returns_typed_report(self):
-        respx.post(
-            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/usage-report"
-        ).mock(return_value=_json_resp(_USAGE_REPORT_RESPONSE))
+        respx.post(f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/usage-report").mock(
+            return_value=_json_resp(_USAGE_REPORT_RESPONSE)
+        )
 
         async with _client() as c:
             report = await c.get_usage_report()
@@ -78,12 +78,8 @@ class TestGetUsageReport:
     @respx.mock
     @pytest.mark.asyncio
     async def test_empty_report(self):
-        respx.post(
-            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/usage-report"
-        ).mock(
-            return_value=_json_resp(
-                {"project_id": "proj-1", "tools": [], "count": 0}
-            )
+        respx.post(f"{BASE}/api/v1/toolbox/v1/projects/proj-1/tools/usage-report").mock(
+            return_value=_json_resp({"project_id": "proj-1", "tools": [], "count": 0})
         )
 
         async with _client() as c:
@@ -98,9 +94,9 @@ class TestInvokeToolSpanAttributes:
     @pytest.mark.asyncio
     async def test_span_attributes_set_on_invocation(self):
         """Verify invoke_tool sets toolbox.* span attributes when OTel is active."""
-        respx.post(
-            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/invoke/add"
-        ).mock(return_value=_json_resp(_INVOCATION_RESPONSE))
+        respx.post(f"{BASE}/api/v1/toolbox/v1/projects/proj-1/invoke/add").mock(
+            return_value=_json_resp(_INVOCATION_RESPONSE)
+        )
 
         mock_span = MagicMock()
         mock_span.is_recording.return_value = True
@@ -131,9 +127,9 @@ class TestInvokeToolSpanAttributes:
     @pytest.mark.asyncio
     async def test_span_not_recording_skips_attributes(self):
         """When span is not recording, no attributes are set."""
-        respx.post(
-            f"{BASE}/api/v1/toolbox/v1/projects/proj-1/invoke/add"
-        ).mock(return_value=_json_resp(_INVOCATION_RESPONSE))
+        respx.post(f"{BASE}/api/v1/toolbox/v1/projects/proj-1/invoke/add").mock(
+            return_value=_json_resp(_INVOCATION_RESPONSE)
+        )
 
         mock_span = MagicMock()
         mock_span.is_recording.return_value = False

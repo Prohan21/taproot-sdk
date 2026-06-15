@@ -9,15 +9,17 @@ from __future__ import annotations
 
 import atexit
 import logging
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import TraceIdRatioBased, ParentBased
+from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from opentelemetry.trace import Tracer
 
 logger = logging.getLogger(__name__)
@@ -186,6 +188,7 @@ def _create_otlp_exporter(endpoint: str, api_key: str | None) -> Any:
 def _setup_auto_instrumentation(libraries: Sequence[str]) -> None:
     """Set up auto-instrumentation for specified LLM libraries."""
     from taproot_sdk.auto_instrument import setup_auto_instrumentation
+
     setup_auto_instrumentation(list(libraries))
 
 
@@ -229,9 +232,7 @@ def get_tracer() -> Tracer:
         RuntimeError: If the SDK has not been initialized.
     """
     if _tracer is None:
-        raise RuntimeError(
-            "Taproot SDK not initialized. Call ev.init() first."
-        )
+        raise RuntimeError("Taproot SDK not initialized. Call ev.init() first.")
     return _tracer
 
 

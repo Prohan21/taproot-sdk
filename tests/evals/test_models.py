@@ -1,6 +1,6 @@
 """Tests for eval models."""
 
-from taproot_sdk.evals.models import AggregateScore, EvalResult, RunHandle
+from taproot_sdk.evals.models import EvalResult, RunHandle
 
 
 class TestRunHandle:
@@ -13,7 +13,7 @@ class TestRunHandle:
         handle = RunHandle(run_id="abc", status="pending", message="queued")
         try:
             handle.run_id = "xyz"  # type: ignore
-            assert False, "Should raise"
+            raise AssertionError("Should raise")
         except AttributeError:
             pass
 

@@ -28,7 +28,7 @@ import logging
 import time
 import uuid
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -172,8 +172,7 @@ class TaprootClient:
 
         if not self.base_url:
             raise ValueError(
-                "base_url is required. "
-                "Either pass it explicitly or call ev.init() first."
+                "base_url is required. Either pass it explicitly or call ev.init() first."
             )
 
         # APIM expects raw key in x-api-key; services expect X-Api-Key-Id
@@ -257,11 +256,13 @@ class TaprootClient:
                         total_wait_seconds=total_wait,
                         method=method,
                     ) from exc
-                wait = min(2 ** attempt, _MAX_RETRY_WAIT)
+                wait = min(2**attempt, _MAX_RETRY_WAIT)
                 total_wait += wait
                 logger.debug(
                     "Connection error, retrying in %ds (attempt %d): %s",
-                    wait, attempt + 1, exc,
+                    wait,
+                    attempt + 1,
+                    exc,
                 )
                 await asyncio.sleep(wait)
                 continue
@@ -272,11 +273,13 @@ class TaprootClient:
                 r._taproot_total_wait = total_wait  # type: ignore[attr-defined]
                 return r
 
-            wait = min(2 ** attempt, _MAX_RETRY_WAIT)
+            wait = min(2**attempt, _MAX_RETRY_WAIT)
             total_wait += wait
             logger.debug(
                 "Retryable status %d, retrying in %ds (attempt %d)",
-                r.status_code, wait, attempt + 1,
+                r.status_code,
+                wait,
+                attempt + 1,
             )
             await asyncio.sleep(wait)
 
@@ -284,6 +287,14 @@ class TaprootClient:
         r._taproot_attempts = _MAX_RETRIES + 1  # type: ignore[attr-defined]
         r._taproot_total_wait = total_wait  # type: ignore[attr-defined]
         return r
+
+    @staticmethod
+    def _json_dict(response: httpx.Response) -> dict[str, Any]:
+        return cast("dict[str, Any]", response.json())
+
+    @staticmethod
+    def _json_dict_list(response: httpx.Response) -> list[dict[str, Any]]:
+        return cast("list[dict[str, Any]]", response.json())
 
     def _propagation_headers(self, headers: dict[str, str] | None) -> dict[str, str]:
         merged = dict(headers or {})
@@ -345,7 +356,8 @@ class TaprootClient:
             else:
                 # 2. Parse the "detail" field
                 raw = json_data.get(
-                    "detail", json_data.get("message", json_data.get("error", "")),
+                    "detail",
+                    json_data.get("message", json_data.get("error", "")),
                 )
 
                 if isinstance(raw, list):
@@ -387,8 +399,9 @@ class TaprootClient:
             correlation_id = (
                 json_data.get("correlation_id")
                 or json_data.get("request_id")
-                or (json_data.get("error", {}) if isinstance(json_data.get("error"), dict)
-                    else {}).get("error_id")
+                or (
+                    json_data.get("error", {}) if isinstance(json_data.get("error"), dict) else {}
+                ).get("error_id")
             )
         if not correlation_id:
             correlation_id = response.headers.get("X-Correlation-ID") or None
@@ -404,19 +417,33 @@ class TaprootClient:
 
         if status in (401, 403):
             raise AuthenticationError(
-                status, detail, service=service, request_url=url, body=body,
+                status,
+                detail,
+                service=service,
+                request_url=url,
+                body=body,
                 project_id=project_id or self.project_id,
-                correlation_id=correlation_id, method=method,
+                correlation_id=correlation_id,
+                method=method,
             )
         if status == 404:
             raise TaprootAPIError(
-                404, detail or "Not found", service=service, request_url=url, body=body,
-                correlation_id=correlation_id, method=method,
+                404,
+                detail or "Not found",
+                service=service,
+                request_url=url,
+                body=body,
+                correlation_id=correlation_id,
+                method=method,
             )
         if status == 409:
             raise ConflictError(
-                detail or "Resource conflict", service=service, request_url=url, body=body,
-                correlation_id=correlation_id, method=method,
+                detail or "Resource conflict",
+                service=service,
+                request_url=url,
+                body=body,
+                correlation_id=correlation_id,
+                method=method,
             )
         if status == 422:
             # Collect structured errors from both Guardrail-S and FastAPI formats
@@ -435,8 +462,12 @@ class TaprootClient:
                 pass
             raise ValidationError(
                 detail or "Validation error",
-                errors=errors, service=service, request_url=url, body=body,
-                correlation_id=correlation_id, method=method,
+                errors=errors,
+                service=service,
+                request_url=url,
+                body=body,
+                correlation_id=correlation_id,
+                method=method,
             )
         if status == 429:
             retry_after: float | None = None
@@ -445,9 +476,13 @@ class TaprootClient:
                 with suppress(ValueError):
                     retry_after = float(raw)
             raise RateLimitError(
-                detail or "Rate limit exceeded", service=service, request_url=url,
-                retry_after=retry_after, body=body,
-                correlation_id=correlation_id, method=method,
+                detail or "Rate limit exceeded",
+                service=service,
+                request_url=url,
+                retry_after=retry_after,
+                body=body,
+                correlation_id=correlation_id,
+                method=method,
             )
 
         # 5xx errors — include retry context
@@ -467,8 +502,13 @@ class TaprootClient:
             )
 
         raise TaprootAPIError(
-            status, detail or f"HTTP {status}", service=service, request_url=url, body=body,
-            correlation_id=correlation_id, method=method,
+            status,
+            detail or f"HTTP {status}",
+            service=service,
+            request_url=url,
+            body=body,
+            correlation_id=correlation_id,
+            method=method,
         )
 
     @staticmethod
@@ -479,8 +519,9 @@ class TaprootClient:
             cid = (
                 data.get("correlation_id")
                 or data.get("request_id")
-                or (data.get("error", {}) if isinstance(data.get("error"), dict)
-                    else {}).get("error_id")
+                or (data.get("error", {}) if isinstance(data.get("error"), dict) else {}).get(
+                    "error_id"
+                )
             )
             if cid:
                 return str(cid)
@@ -517,21 +558,27 @@ class TaprootClient:
         return f"/api/v1/prompts{path}"
 
     def _project_prompts_path(
-        self, suffix: str, project_id: str | None = None,
+        self,
+        suffix: str,
+        project_id: str | None = None,
     ) -> str:
         """Build project-scoped Prompt-S Management path."""
         pid = project_id or self.project_id
         return self._prompts_path(f"/projects/{pid}/prompts{suffix}")
 
     def _project_guardrail_path(
-        self, suffix: str, project_id: str | None = None,
+        self,
+        suffix: str,
+        project_id: str | None = None,
     ) -> str:
         """Build project-scoped Guardrail-S path."""
         pid = project_id or self.project_id
         return self._guardrail_path(f"/projects/{pid}{suffix}")
 
     def _project_evals_path(
-        self, suffix: str, project_id: str | None = None,
+        self,
+        suffix: str,
+        project_id: str | None = None,
     ) -> str:
         """Build project-scoped Evals-S path."""
         pid = project_id or self.project_id
@@ -544,7 +591,9 @@ class TaprootClient:
         return f"/api/v1/toolbox/v1{path}"
 
     def _project_toolbox_path(
-        self, suffix: str, project_id: str | None = None,
+        self,
+        suffix: str,
+        project_id: str | None = None,
     ) -> str:
         """Build project-scoped ToolBox-S path."""
         pid = project_id or self.project_id
@@ -582,7 +631,9 @@ class TaprootClient:
             "message": message,
             "project_ids": project_ids or [self.project_id],
         }
-        r = await self._request("POST", self._worker_path("/sessions"), json=body, service="workers")
+        r = await self._request(
+            "POST", self._worker_path("/sessions"), json=body, service="workers"
+        )
         self._raise_for_status(r, service="workers")
         return SessionCreated.from_api_response(r.json())
 
@@ -591,56 +642,78 @@ class TaprootClient:
         from taproot_sdk.workers.models import WorkerSession
 
         r = await self._request(
-            "GET", self._worker_path(f"/sessions/{session_id}"),
-            headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+            "GET",
+            self._worker_path(f"/sessions/{session_id}"),
+            headers={"Authorization": f"Bearer {session_token}"},
+            service="workers",
         )
         self._raise_for_status(r, service="workers")
         return WorkerSession.from_api_response(r.json())
 
     async def send_worker_message(
-        self, session_id: str, message: str, *, session_token: str,
+        self,
+        session_id: str,
+        message: str,
+        *,
+        session_token: str,
     ) -> SessionMessage:
         """Send a message to a worker session, triggering the execution pipeline."""
         from taproot_sdk.workers.models import SessionMessage
 
         r = await self._request(
-            "POST", self._worker_path(f"/sessions/{session_id}/messages"),
+            "POST",
+            self._worker_path(f"/sessions/{session_id}/messages"),
             json={"message": message},
-            headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+            headers={"Authorization": f"Bearer {session_token}"},
+            service="workers",
         )
         self._raise_for_status(r, service="workers")
         return SessionMessage.from_api_response(r.json())
 
     async def approve_worker_action(
-        self, session_id: str, action_id: str, *, session_token: str,
-        edited_payload: dict | None = None,
+        self,
+        session_id: str,
+        action_id: str,
+        *,
+        session_token: str,
+        edited_payload: dict[str, Any] | None = None,
     ) -> PendingAction:
         """Approve a pending destructive tool action."""
         from taproot_sdk.workers.models import PendingAction
 
-        body: dict = {}
+        body: dict[str, Any] = {}
         if edited_payload is not None:
             body["edited_payload"] = edited_payload
         r = await self._request(
-            "POST", self._worker_path(f"/sessions/{session_id}/pending-actions/{action_id}/approve"),
-            json=body, headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+            "POST",
+            self._worker_path(f"/sessions/{session_id}/pending-actions/{action_id}/approve"),
+            json=body,
+            headers={"Authorization": f"Bearer {session_token}"},
+            service="workers",
         )
         self._raise_for_status(r, service="workers")
         return PendingAction.from_api_response(r.json())
 
     async def reject_worker_action(
-        self, session_id: str, action_id: str, *, session_token: str,
+        self,
+        session_id: str,
+        action_id: str,
+        *,
+        session_token: str,
         reason: str | None = None,
     ) -> PendingAction:
         """Reject a pending destructive tool action (step will be skipped)."""
         from taproot_sdk.workers.models import PendingAction
 
-        body: dict = {}
+        body: dict[str, Any] = {}
         if reason is not None:
             body["reason"] = reason
         r = await self._request(
-            "POST", self._worker_path(f"/sessions/{session_id}/pending-actions/{action_id}/reject"),
-            json=body, headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+            "POST",
+            self._worker_path(f"/sessions/{session_id}/pending-actions/{action_id}/reject"),
+            json=body,
+            headers={"Authorization": f"Bearer {session_token}"},
+            service="workers",
         )
         self._raise_for_status(r, service="workers")
         return PendingAction.from_api_response(r.json())
@@ -648,27 +721,36 @@ class TaprootClient:
     async def delete_worker_session(self, session_id: str, *, session_token: str) -> None:
         """Delete a worker session and all associated data (cascade)."""
         r = await self._request(
-            "DELETE", self._worker_path(f"/sessions/{session_id}"),
-            headers={"Authorization": f"Bearer {session_token}"}, service="workers",
+            "DELETE",
+            self._worker_path(f"/sessions/{session_id}"),
+            headers={"Authorization": f"Bearer {session_token}"},
+            service="workers",
         )
         self._raise_for_status(r, service="workers")
 
-    async def health_workers(self) -> dict:
+    async def health_workers(self) -> dict[str, Any]:
         """Health check for Worker-S."""
         r = await self._request("GET", self._worker_path("/health"), service="workers")
         self._raise_for_status(r, service="workers")
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # Retrieval-S — Store Management
     # ==================================================================
 
     async def create_store(
-        self, name: str, *, display_name: str | None = None,
-        embedding_provider: str | None = None, embedding_model: str | None = None,
-        index_type: str | None = None, hnsw_m: int | None = None,
-        hnsw_ef_construction: int | None = None, ivfflat_lists: int | None = None,
-        default_ef_search: int | None = None, use_halfvec: bool | None = None,
+        self,
+        name: str,
+        *,
+        display_name: str | None = None,
+        embedding_provider: str | None = None,
+        embedding_model: str | None = None,
+        index_type: str | None = None,
+        hnsw_m: int | None = None,
+        hnsw_ef_construction: int | None = None,
+        ivfflat_lists: int | None = None,
+        default_ef_search: int | None = None,
+        use_halfvec: bool | None = None,
         enable_fulltext: bool | None = None,
     ) -> StoreCreated:
         """Create a new vector store.
@@ -712,7 +794,10 @@ class TaprootClient:
         if enable_fulltext is not None:
             body["enable_fulltext"] = enable_fulltext
         r = await self._request(
-            "POST", self._retrieval_path("/stores"), json=body, service="retrieval",
+            "POST",
+            self._retrieval_path("/stores"),
+            json=body,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return StoreCreated.from_api_response(r.json())
@@ -720,8 +805,10 @@ class TaprootClient:
     async def list_stores(self, *, offset: int = 0, limit: int = 50) -> StoreList:
         """List all accessible stores."""
         r = await self._request(
-            "GET", self._retrieval_path("/stores"),
-            params={"offset": offset, "limit": limit}, service="retrieval",
+            "GET",
+            self._retrieval_path("/stores"),
+            params={"offset": offset, "limit": limit},
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return StoreList.from_api_response(r.json())
@@ -729,7 +816,9 @@ class TaprootClient:
     async def get_store(self, store_id: str) -> StoreInfo:
         """Get store details by UUID."""
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_id}"), service="retrieval",
+            "GET",
+            self._retrieval_path(f"/stores/{store_id}"),
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return StoreInfo.from_api_response(r.json())
@@ -737,13 +826,18 @@ class TaprootClient:
     async def get_store_by_name(self, name: str) -> StoreInfo:
         """Get store details by name."""
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/by-name/{name}"), service="retrieval",
+            "GET",
+            self._retrieval_path(f"/stores/by-name/{name}"),
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return StoreInfo.from_api_response(r.json())
 
     async def update_store(
-        self, store_id: str, *, display_name: str | None = None,
+        self,
+        store_id: str,
+        *,
+        display_name: str | None = None,
         default_ef_search: int | None = None,
     ) -> StoreInfo:
         """Update store settings."""
@@ -753,8 +847,10 @@ class TaprootClient:
         if default_ef_search is not None:
             body["default_ef_search"] = default_ef_search
         r = await self._request(
-            "PATCH", self._retrieval_path(f"/stores/{store_id}"),
-            json=body, service="retrieval",
+            "PATCH",
+            self._retrieval_path(f"/stores/{store_id}"),
+            json=body,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return StoreInfo.from_api_response(r.json())
@@ -762,7 +858,9 @@ class TaprootClient:
     async def delete_store(self, store_id: str) -> StoreDeleted:
         """Delete a store (soft-delete: sets is_active=false)."""
         r = await self._request(
-            "DELETE", self._retrieval_path(f"/stores/{store_id}"), service="retrieval",
+            "DELETE",
+            self._retrieval_path(f"/stores/{store_id}"),
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return StoreDeleted.from_api_response(r.json())
@@ -770,7 +868,8 @@ class TaprootClient:
     async def get_store_stats(self, store_name: str) -> StoreStatistics:
         """Get usage statistics for a store."""
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_name}/stats"),
+            "GET",
+            self._retrieval_path(f"/stores/{store_name}/stats"),
             service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
@@ -781,12 +880,16 @@ class TaprootClient:
     # ==================================================================
 
     async def grant_store_access(
-        self, store_id: str, api_key_id: str, *,
+        self,
+        store_id: str,
+        api_key_id: str,
+        *,
         access_level: str = "read_write",
     ) -> AccessGranted:
         """Grant an API key access to a store."""
         r = await self._request(
-            "POST", self._retrieval_path(f"/stores/{store_id}/access"),
+            "POST",
+            self._retrieval_path(f"/stores/{store_id}/access"),
             json={"api_key_id": api_key_id, "access_level": access_level},
             service="retrieval",
         )
@@ -796,8 +899,10 @@ class TaprootClient:
     async def revoke_store_access(self, store_id: str, api_key_id: str) -> AccessRevoked:
         """Revoke an API key's access to a store."""
         r = await self._request(
-            "DELETE", self._retrieval_path(f"/stores/{store_id}/access"),
-            json={"api_key_id": api_key_id}, service="retrieval",
+            "DELETE",
+            self._retrieval_path(f"/stores/{store_id}/access"),
+            json={"api_key_id": api_key_id},
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return AccessRevoked.from_api_response(r.json())
@@ -805,7 +910,8 @@ class TaprootClient:
     async def list_store_access(self, store_id: str) -> AccessList:
         """List all access grants for a store."""
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_id}/access"),
+            "GET",
+            self._retrieval_path(f"/stores/{store_id}/access"),
             service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
@@ -816,10 +922,17 @@ class TaprootClient:
     # ==================================================================
 
     async def retrieval_query(
-        self, store_name: str, query: str, top_k: int = 10,
-        filters: dict | None = None, *, ef_search: int | None = None,
-        search_mode: str = "vector_only", keyword_weight: float | None = None,
-        rerank: bool = False, rerank_top_n: int | None = None,
+        self,
+        store_name: str,
+        query: str,
+        top_k: int = 10,
+        filters: dict[str, Any] | None = None,
+        *,
+        ef_search: int | None = None,
+        search_mode: str = "vector_only",
+        keyword_weight: float | None = None,
+        rerank: bool = False,
+        rerank_top_n: int | None = None,
     ) -> QueryResponse:
         """Query a retrieval store for relevant documents.
 
@@ -853,8 +966,10 @@ class TaprootClient:
         if rerank_top_n is not None:
             body["rerank_top_n"] = rerank_top_n
         r = await self._request(
-            "POST", self._retrieval_path(f"/stores/{store_name}/query"),
-            json=body, service="retrieval",
+            "POST",
+            self._retrieval_path(f"/stores/{store_name}/query"),
+            json=body,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return QueryResponse.from_api_response(r.json())
@@ -864,9 +979,14 @@ class TaprootClient:
     # ==================================================================
 
     async def ingest_document(
-        self, store_name: str, *, index: str,
-        source_uri: str | None = None, signed_url: str | None = None,
-        content_base64: str | None = None, filename: str | None = None,
+        self,
+        store_name: str,
+        *,
+        index: str,
+        source_uri: str | None = None,
+        signed_url: str | None = None,
+        content_base64: str | None = None,
+        filename: str | None = None,
         content_type: str | None = None,
         metadata: dict[str, Any] | None = None,
         chunking: dict[str, Any] | None = None,
@@ -896,8 +1016,10 @@ class TaprootClient:
         if chunking is not None:
             body["chunking"] = chunking
         r = await self._request(
-            "POST", self._retrieval_path(f"/stores/{store_name}/ingest"),
-            json=body, service="retrieval",
+            "POST",
+            self._retrieval_path(f"/stores/{store_name}/ingest"),
+            json=body,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return IngestionJob.from_api_response(r.json())
@@ -905,17 +1027,24 @@ class TaprootClient:
     async def get_ingestion_job(self, store_name: str, job_id: str) -> JobDetail:
         """Get detailed status of an ingestion job."""
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_name}/ingest/{job_id}"),
+            "GET",
+            self._retrieval_path(f"/stores/{store_name}/ingest/{job_id}"),
             service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return JobDetail.from_api_response(r.json())
 
     async def list_ingestion_jobs(
-        self, store_name: str, *, status: str | None = None,
-        created_after: str | None = None, created_before: str | None = None,
-        sort_by: str = "created_at", sort_order: str = "desc",
-        offset: int = 0, limit: int = 50,
+        self,
+        store_name: str,
+        *,
+        status: str | None = None,
+        created_after: str | None = None,
+        created_before: str | None = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        offset: int = 0,
+        limit: int = 50,
     ) -> JobList:
         """List ingestion jobs for a store.
 
@@ -930,8 +1059,10 @@ class TaprootClient:
             limit: Pagination limit (1-100, default 50).
         """
         params: dict[str, Any] = {
-            "offset": offset, "limit": limit,
-            "sort_by": sort_by, "sort_order": sort_order,
+            "offset": offset,
+            "limit": limit,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
         }
         if status is not None:
             params["status"] = status
@@ -940,8 +1071,10 @@ class TaprootClient:
         if created_before is not None:
             params["created_before"] = created_before
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_name}/ingest/jobs"),
-            params=params, service="retrieval",
+            "GET",
+            self._retrieval_path(f"/stores/{store_name}/ingest/jobs"),
+            params=params,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return JobList.from_api_response(r.json())
@@ -949,7 +1082,8 @@ class TaprootClient:
     async def cancel_ingestion_job(self, store_name: str, job_id: str) -> JobCancelled:
         """Cancel a pending or processing ingestion job."""
         r = await self._request(
-            "DELETE", self._retrieval_path(f"/stores/{store_name}/ingest/{job_id}"),
+            "DELETE",
+            self._retrieval_path(f"/stores/{store_name}/ingest/{job_id}"),
             service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
@@ -960,9 +1094,14 @@ class TaprootClient:
     # ==================================================================
 
     async def batch_ingest(
-        self, store_name: str, *, source: dict[str, Any],
-        pipeline_id: str = "default", chunking: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None, max_documents: int | None = None,
+        self,
+        store_name: str,
+        *,
+        source: dict[str, Any],
+        pipeline_id: str = "default",
+        chunking: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        max_documents: int | None = None,
     ) -> BatchCreated:
         """Create a batch ingestion job."""
         body: dict[str, Any] = {"source": source, "pipeline_id": pipeline_id}
@@ -973,8 +1112,10 @@ class TaprootClient:
         if max_documents is not None:
             body["max_documents"] = max_documents
         r = await self._request(
-            "POST", self._retrieval_path(f"/stores/{store_name}/ingest/batch"),
-            json=body, service="retrieval",
+            "POST",
+            self._retrieval_path(f"/stores/{store_name}/ingest/batch"),
+            json=body,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return BatchCreated.from_api_response(r.json())
@@ -990,8 +1131,13 @@ class TaprootClient:
         return BatchStatus.from_api_response(r.json())
 
     async def list_batch_jobs(
-        self, store_name: str, batch_id: str, *,
-        status: str | None = None, offset: int = 0, limit: int = 50,
+        self,
+        store_name: str,
+        batch_id: str,
+        *,
+        status: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
     ) -> BatchJobList:
         """List individual jobs within a batch."""
         params: dict[str, Any] = {"offset": offset, "limit": limit}
@@ -1000,7 +1146,8 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._retrieval_path(f"/stores/{store_name}/ingest/batch/{batch_id}/jobs"),
-            params=params, service="retrieval",
+            params=params,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return BatchJobList.from_api_response(r.json())
@@ -1020,7 +1167,11 @@ class TaprootClient:
     # ==================================================================
 
     async def list_documents(
-        self, store_name: str, *, offset: int = 0, limit: int = 20,
+        self,
+        store_name: str,
+        *,
+        offset: int = 0,
+        limit: int = 20,
         doc_id: str | None = None,
     ) -> DocumentList:
         """List documents in a store."""
@@ -1028,8 +1179,10 @@ class TaprootClient:
         if doc_id is not None:
             params["doc_id"] = doc_id
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_name}/documents"),
-            params=params, service="retrieval",
+            "GET",
+            self._retrieval_path(f"/stores/{store_name}/documents"),
+            params=params,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return DocumentList.from_api_response(r.json())
@@ -1037,7 +1190,8 @@ class TaprootClient:
     async def get_document(self, store_name: str, doc_id: str) -> DocumentDetail:
         """Get document details."""
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_name}/documents/{doc_id}"),
+            "GET",
+            self._retrieval_path(f"/stores/{store_name}/documents/{doc_id}"),
             service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
@@ -1046,7 +1200,8 @@ class TaprootClient:
     async def delete_document(self, store_name: str, doc_id: str) -> DocumentDeleted:
         """Soft-delete a logical document; retained chunks remain until retention purge."""
         r = await self._request(
-            "DELETE", self._retrieval_path(f"/stores/{store_name}/documents/{doc_id}"),
+            "DELETE",
+            self._retrieval_path(f"/stores/{store_name}/documents/{doc_id}"),
             service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
@@ -1086,8 +1241,11 @@ class TaprootClient:
             body["chunking"] = chunking
         headers = {"Idempotency-Key": idempotency_key}
         r = await self._request(
-            "POST", self._retrieval_path(f"/stores/{store_name}/documents"),
-            json=body, headers=headers, service="retrieval",
+            "POST",
+            self._retrieval_path(f"/stores/{store_name}/documents"),
+            json=body,
+            headers=headers,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return DocumentOperationResult.from_api_response(r.json())
@@ -1134,8 +1292,11 @@ class TaprootClient:
             body["chunking"] = chunking
         headers = {"Idempotency-Key": idempotency_key}
         r = await self._request(
-            "PUT", self._retrieval_path(f"/stores/{store_name}/documents"),
-            json=body, headers=headers, service="retrieval",
+            "PUT",
+            self._retrieval_path(f"/stores/{store_name}/documents"),
+            json=body,
+            headers=headers,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return DocumentOperationResult.from_api_response(r.json())
@@ -1157,8 +1318,11 @@ class TaprootClient:
             selector["filename"] = filename
         headers = {"Idempotency-Key": idempotency_key}
         r = await self._request(
-            "POST", self._retrieval_path(f"/stores/{store_name}/documents/delete"),
-            json={"selector": selector}, headers=headers, service="retrieval",
+            "POST",
+            self._retrieval_path(f"/stores/{store_name}/documents/delete"),
+            json={"selector": selector},
+            headers=headers,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return DocumentOperationResult.from_api_response(r.json())
@@ -1193,27 +1357,38 @@ class TaprootClient:
     # ==================================================================
 
     async def upload_chunks(
-        self, store_name: str, doc_id: str, chunks: list[dict[str, Any]],
+        self,
+        store_name: str,
+        doc_id: str,
+        chunks: list[dict[str, Any]],
     ) -> ChunksUploaded:
         """Upload pre-computed chunks directly to a store."""
         r = await self._request(
-            "POST", self._retrieval_path(f"/stores/{store_name}/chunks"),
-            json={"doc_id": doc_id, "chunks": chunks}, service="retrieval",
+            "POST",
+            self._retrieval_path(f"/stores/{store_name}/chunks"),
+            json={"doc_id": doc_id, "chunks": chunks},
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return ChunksUploaded.from_api_response(r.json())
 
     async def list_chunks(
-        self, store_name: str, *, doc_id: str | None = None,
-        offset: int = 0, limit: int = 20,
+        self,
+        store_name: str,
+        *,
+        doc_id: str | None = None,
+        offset: int = 0,
+        limit: int = 20,
     ) -> ChunkList:
         """List chunks in a store."""
         params: dict[str, Any] = {"offset": offset, "limit": limit}
         if doc_id is not None:
             params["doc_id"] = doc_id
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_name}/chunks"),
-            params=params, service="retrieval",
+            "GET",
+            self._retrieval_path(f"/stores/{store_name}/chunks"),
+            params=params,
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return ChunkList.from_api_response(r.json())
@@ -1221,7 +1396,8 @@ class TaprootClient:
     async def get_chunk(self, store_name: str, chunk_id: str) -> ChunkInfo:
         """Get a single chunk by ID."""
         r = await self._request(
-            "GET", self._retrieval_path(f"/stores/{store_name}/chunks/{chunk_id}"),
+            "GET",
+            self._retrieval_path(f"/stores/{store_name}/chunks/{chunk_id}"),
             service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
@@ -1230,8 +1406,10 @@ class TaprootClient:
     async def delete_chunks(self, store_name: str, doc_id: str) -> ChunksDeleted:
         """Delete all chunks for a document."""
         r = await self._request(
-            "DELETE", self._retrieval_path(f"/stores/{store_name}/chunks"),
-            params={"doc_id": doc_id}, service="retrieval",
+            "DELETE",
+            self._retrieval_path(f"/stores/{store_name}/chunks"),
+            params={"doc_id": doc_id},
+            service="retrieval",
         )
         self._raise_for_status(r, service="retrieval")
         return ChunksDeleted.from_api_response(r.json())
@@ -1257,7 +1435,10 @@ class TaprootClient:
 
         pid = project_id or self.project_id
         return await self._prompt_cache.get_or_fetch(
-            pid, name, version=version, label=label,
+            pid,
+            name,
+            version=version,
+            label=label,
             fetch_fn=self._fetch_prompt_serving,
         )
 
@@ -1277,6 +1458,7 @@ class TaprootClient:
 
         if loop is not None and loop.is_running():
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(asyncio.run, coro)
                 return future.result()
@@ -1299,14 +1481,18 @@ class TaprootClient:
             params["label"] = label
 
         r = await self._request(
-            "GET", f"/serve/{project_id}/{name}", params=params,
+            "GET",
+            f"/serve/{project_id}/{name}",
+            params=params,
             service="prompts-serving",
         )
 
         if r.status_code == 404:
             raise PromptNotFoundError(
-                name, project_id=project_id,
-                version=version, label=label,
+                name,
+                project_id=project_id,
+                version=version,
+                label=label,
                 request_url=str(r.request.url) if r.request else "",
                 body=r.text,
                 correlation_id=self._extract_correlation_id(r),
@@ -1346,7 +1532,8 @@ class TaprootClient:
         if raw_tools is not None:
             tools = tuple(
                 ToolDefinition(
-                    name=t["name"], description=t["description"],
+                    name=t["name"],
+                    description=t["description"],
                     parameters=t.get("parameters", {}),
                     type=t.get("type", "function"),
                 )
@@ -1405,7 +1592,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_prompts(
         self,
@@ -1428,7 +1615,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def get_prompt_metadata(
         self,
@@ -1444,13 +1631,15 @@ class TaprootClient:
         )
         if r.status_code == 404:
             raise PromptNotFoundError(
-                name, project_id=project_id or self.project_id,
-                request_url=str(r.request.url) if r.request else "", body=r.text,
+                name,
+                project_id=project_id or self.project_id,
+                request_url=str(r.request.url) if r.request else "",
+                body=r.text,
                 correlation_id=self._extract_correlation_id(r),
                 method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
-        return r.json()
+        return self._json_dict(r)
 
     async def update_prompt(
         self,
@@ -1477,13 +1666,15 @@ class TaprootClient:
         )
         if r.status_code == 404:
             raise PromptNotFoundError(
-                name, project_id=project_id or self.project_id,
-                request_url=str(r.request.url) if r.request else "", body=r.text,
+                name,
+                project_id=project_id or self.project_id,
+                request_url=str(r.request.url) if r.request else "",
+                body=r.text,
                 correlation_id=self._extract_correlation_id(r),
                 method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
-        return r.json()
+        return self._json_dict(r)
 
     async def archive_prompt(
         self,
@@ -1508,8 +1699,10 @@ class TaprootClient:
         )
         if r.status_code == 404:
             raise PromptNotFoundError(
-                name, project_id=project_id or self.project_id,
-                request_url=str(r.request.url) if r.request else "", body=r.text,
+                name,
+                project_id=project_id or self.project_id,
+                request_url=str(r.request.url) if r.request else "",
+                body=r.text,
                 correlation_id=self._extract_correlation_id(r),
                 method=r.request.method if r.request else None,
             )
@@ -1524,8 +1717,8 @@ class TaprootClient:
         content: str | None = None,
         messages: list[dict[str, Any]] | None = None,
         tools: list[dict[str, Any]] | None = None,
-        config: dict | None = None,
-        model_config: dict | None = None,
+        config: dict[str, Any] | None = None,
+        model_config: dict[str, Any] | None = None,
         change_description: str | None = None,
         source: str = "manual",
         project_id: str | None = None,
@@ -1554,7 +1747,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_versions(
         self,
@@ -1573,7 +1766,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def get_version(
         self,
@@ -1590,14 +1783,16 @@ class TaprootClient:
         )
         if r.status_code == 404:
             raise PromptNotFoundError(
-                prompt_name, project_id=project_id or self.project_id,
+                prompt_name,
+                project_id=project_id or self.project_id,
                 version=version,
-                request_url=str(r.request.url) if r.request else "", body=r.text,
+                request_url=str(r.request.url) if r.request else "",
+                body=r.text,
                 correlation_id=self._extract_correlation_id(r),
                 method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
-        return r.json()
+        return self._json_dict(r)
 
     async def diff_versions(
         self,
@@ -1615,7 +1810,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     # -- Labels --
 
@@ -1635,7 +1830,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def set_weighted_label(
         self,
@@ -1658,7 +1853,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_labels(
         self,
@@ -1673,7 +1868,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict_list(r)
 
     async def get_label(
         self,
@@ -1690,14 +1885,16 @@ class TaprootClient:
         )
         if r.status_code == 404:
             raise PromptNotFoundError(
-                prompt_name, project_id=project_id or self.project_id,
+                prompt_name,
+                project_id=project_id or self.project_id,
                 label=label,
-                request_url=str(r.request.url) if r.request else "", body=r.text,
+                request_url=str(r.request.url) if r.request else "",
+                body=r.text,
                 correlation_id=self._extract_correlation_id(r),
                 method=r.request.method if r.request else None,
             )
         self._raise_for_status(r, service="prompts", project_id=project_id or self.project_id)
-        return r.json()
+        return self._json_dict(r)
 
     async def delete_label(
         self,
@@ -1731,13 +1928,14 @@ class TaprootClient:
         r = await self._request(
             "POST",
             self._project_prompts_path(
-                f"/{prompt_name}/versions/{version}/approve", project_id,
+                f"/{prompt_name}/versions/{version}/approve",
+                project_id,
             ),
             json=body,
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def reject_version(
         self,
@@ -1754,13 +1952,14 @@ class TaprootClient:
         r = await self._request(
             "POST",
             self._project_prompts_path(
-                f"/{prompt_name}/versions/{version}/reject", project_id,
+                f"/{prompt_name}/versions/{version}/reject",
+                project_id,
             ),
             json=body,
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     # -- Examples --
 
@@ -1787,7 +1986,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_examples(
         self,
@@ -1812,7 +2011,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def get_example_stats(
         self,
@@ -1830,7 +2029,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def delete_example(
         self,
@@ -1843,7 +2042,8 @@ class TaprootClient:
         r = await self._request(
             "DELETE",
             self._project_prompts_path(
-                f"/{prompt_name}/examples/{example_id}", project_id,
+                f"/{prompt_name}/examples/{example_id}",
+                project_id,
             ),
             service="prompts",
         )
@@ -1873,13 +2073,14 @@ class TaprootClient:
         r = await self._request(
             "PUT",
             self._project_prompts_path(
-                f"/{prompt_name}/execution-config", project_id,
+                f"/{prompt_name}/execution-config",
+                project_id,
             ),
             json={"mode": mode, "config": config},
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def get_execution_config(
         self,
@@ -1891,12 +2092,13 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_prompts_path(
-                f"/{prompt_name}/execution-config", project_id,
+                f"/{prompt_name}/execution-config",
+                project_id,
             ),
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def delete_execution_config(
         self,
@@ -1908,7 +2110,8 @@ class TaprootClient:
         r = await self._request(
             "DELETE",
             self._project_prompts_path(
-                f"/{prompt_name}/execution-config", project_id,
+                f"/{prompt_name}/execution-config",
+                project_id,
             ),
             service="prompts",
         )
@@ -1921,7 +2124,7 @@ class TaprootClient:
         prompt_name: str,
         *,
         optimizer_name: str = "MIPROv2",
-        config: dict | None = None,
+        config: dict[str, Any] | None = None,
         project_id: str | None = None,
     ) -> dict[str, Any]:
         """Trigger an automatic prompt optimization (APO) job.
@@ -1942,7 +2145,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def get_optimization_job(
         self,
@@ -1958,7 +2161,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_optimization_jobs(
         self,
@@ -1973,13 +2176,14 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_prompts_path(
-                f"/{prompt_name}/optimization-jobs", project_id,
+                f"/{prompt_name}/optimization-jobs",
+                project_id,
             ),
             params=params,
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     # -- Partials --
 
@@ -2006,7 +2210,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_partials(
         self,
@@ -2025,7 +2229,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def get_partial(
         self,
@@ -2041,7 +2245,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def update_partial(
         self,
@@ -2063,7 +2267,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def delete_partial(
         self,
@@ -2106,7 +2310,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_protected_labels(
         self,
@@ -2121,7 +2325,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict_list(r)
 
     async def delete_protected_label(
         self,
@@ -2166,7 +2370,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def export_project(
         self,
@@ -2188,7 +2392,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     async def import_prompts(
         self,
@@ -2216,7 +2420,7 @@ class TaprootClient:
             service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     # -- Examples (CSV Upload) --
 
@@ -2242,7 +2446,8 @@ class TaprootClient:
         if isinstance(csv_content, str):
             csv_content = csv_content.encode("utf-8")
         url = self._project_prompts_path(
-            f"/{prompt_name}/examples/upload", project_id,
+            f"/{prompt_name}/examples/upload",
+            project_id,
         )
         r = await self._http.request(
             "POST",
@@ -2250,7 +2455,7 @@ class TaprootClient:
             files={"file": (filename, csv_content, "text/csv")},
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # Health
@@ -2262,7 +2467,7 @@ class TaprootClient:
         else:
             r = await self._request("GET", "/api/v1/retrieval/health/ready", service="retrieval")
         self._raise_for_status(r, service="retrieval")
-        return r.json()
+        return self._json_dict(r)
 
     async def health_evals(self) -> dict[str, Any]:
         if self.direct_mode:
@@ -2270,7 +2475,7 @@ class TaprootClient:
         else:
             r = await self._request("GET", "/api/v1/evals/health/ready", service="evals")
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     async def health_evals_basic(self) -> dict[str, Any]:
         """GET /health — basic liveness check."""
@@ -2279,20 +2484,22 @@ class TaprootClient:
         else:
             r = await self._request("GET", "/api/v1/evals/health", service="evals")
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     async def health_guardrails(self) -> dict[str, Any]:
         r = await self._request("GET", self._guardrail_path("/health"), service="guardrails")
         self._raise_for_status(r, service="guardrails")
-        return r.json()
+        return self._json_dict(r)
 
     async def health_prompts(self) -> dict[str, Any]:
         """Check Prompt-S Management service health."""
         r = await self._request(
-            "GET", self._prompts_path("/health"), service="prompts",
+            "GET",
+            self._prompts_path("/health"),
+            service="prompts",
         )
         self._raise_for_status(r, service="prompts")
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # Guardrail-S
@@ -2405,7 +2612,8 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_guardrail_path(
-                f"/check-results/{result_id}", project_id,
+                f"/check-results/{result_id}",
+                project_id,
             ),
             service="guardrails",
         )
@@ -2422,7 +2630,8 @@ class TaprootClient:
         r = await self._request(
             "DELETE",
             self._project_guardrail_path(
-                f"/check-results/{result_id}", project_id,
+                f"/check-results/{result_id}",
+                project_id,
             ),
             service="guardrails",
         )
@@ -2576,7 +2785,8 @@ class TaprootClient:
         r = await self._request(
             "PUT",
             self._project_guardrail_path(
-                f"/configs/{config_name}", project_id,
+                f"/configs/{config_name}",
+                project_id,
             ),
             json=body,
             service="guardrails",
@@ -2594,7 +2804,8 @@ class TaprootClient:
         r = await self._request(
             "DELETE",
             self._project_guardrail_path(
-                f"/configs/{config_name}", project_id,
+                f"/configs/{config_name}",
+                project_id,
             ),
             service="guardrails",
         )
@@ -2610,7 +2821,8 @@ class TaprootClient:
         r = await self._request(
             "PUT",
             self._project_guardrail_path(
-                f"/configs/{config_name}/default", project_id,
+                f"/configs/{config_name}/default",
+                project_id,
             ),
             service="guardrails",
         )
@@ -2667,7 +2879,10 @@ class TaprootClient:
         return [GoldenDataset.from_api_response(d) for d in r.json()]
 
     async def get_dataset(
-        self, dataset_id: str, *, project_id: str | None = None,
+        self,
+        dataset_id: str,
+        *,
+        project_id: str | None = None,
     ) -> GoldenDataset:
         """Get a single golden dataset by ID."""
         r = await self._request(
@@ -2706,7 +2921,10 @@ class TaprootClient:
         return GoldenDataset.from_api_response(r.json())
 
     async def delete_dataset(
-        self, dataset_id: str, *, project_id: str | None = None,
+        self,
+        dataset_id: str,
+        *,
+        project_id: str | None = None,
     ) -> None:
         """Soft-delete a golden dataset."""
         r = await self._request(
@@ -2759,7 +2977,8 @@ class TaprootClient:
         r = await self._request(
             "POST",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/items", project_id,
+                f"/golden-datasets/{dataset_id}/items",
+                project_id,
             ),
             json=body,
         )
@@ -2782,7 +3001,8 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/items", project_id,
+                f"/golden-datasets/{dataset_id}/items",
+                project_id,
             ),
             params=params,
         )
@@ -2840,7 +3060,8 @@ class TaprootClient:
         r = await self._request(
             "PATCH",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/items/{item_id}", project_id,
+                f"/golden-datasets/{dataset_id}/items/{item_id}",
+                project_id,
             ),
             json=body,
         )
@@ -2858,7 +3079,8 @@ class TaprootClient:
         r = await self._request(
             "DELETE",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/items/{item_id}", project_id,
+                f"/golden-datasets/{dataset_id}/items/{item_id}",
+                project_id,
             ),
         )
         self._raise_for_status(r, service="evals")
@@ -2876,7 +3098,8 @@ class TaprootClient:
         r = await self._request(
             "POST",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/items/session-assign", project_id,
+                f"/golden-datasets/{dataset_id}/items/session-assign",
+                project_id,
             ),
             json={
                 "item_ids": item_ids,
@@ -2885,7 +3108,7 @@ class TaprootClient:
             },
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     async def promote_trace_to_dataset(
         self,
@@ -2900,7 +3123,8 @@ class TaprootClient:
         r = await self._request(
             "POST",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/items/from-trace", project_id,
+                f"/golden-datasets/{dataset_id}/items/from-trace",
+                project_id,
             ),
             json={
                 "trace_ids": trace_ids,
@@ -2909,7 +3133,7 @@ class TaprootClient:
             },
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     # -- Dataset Versioning --
 
@@ -2928,7 +3152,8 @@ class TaprootClient:
         r = await self._request(
             "POST",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/versions", project_id,
+                f"/golden-datasets/{dataset_id}/versions",
+                project_id,
             ),
             json=body,
         )
@@ -2945,7 +3170,8 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_evals_path(
-                f"/golden-datasets/{dataset_id}/versions", project_id,
+                f"/golden-datasets/{dataset_id}/versions",
+                project_id,
             ),
         )
         self._raise_for_status(r, service="evals")
@@ -3007,7 +3233,10 @@ class TaprootClient:
         return [TestConfiguration.from_api_response(c) for c in r.json()]
 
     async def get_test_config(
-        self, config_id: str, *, project_id: str | None = None,
+        self,
+        config_id: str,
+        *,
+        project_id: str | None = None,
     ) -> TestConfiguration:
         """Get a single test configuration."""
         r = await self._request(
@@ -3049,7 +3278,10 @@ class TaprootClient:
         return TestConfiguration.from_api_response(r.json())
 
     async def delete_test_config(
-        self, config_id: str, *, project_id: str | None = None,
+        self,
+        config_id: str,
+        *,
+        project_id: str | None = None,
     ) -> None:
         """Soft-delete a test configuration."""
         r = await self._request(
@@ -3182,10 +3414,7 @@ class TaprootClient:
         )
         self._raise_for_status(r, service="evals")
         data = r.json()
-        return [
-            MetricComparison.from_api_response(c)
-            for c in data.get("comparisons", [])
-        ]
+        return [MetricComparison.from_api_response(c) for c in data.get("comparisons", [])]
 
     async def wait_for_eval(
         self,
@@ -3203,7 +3432,8 @@ class TaprootClient:
 
         while True:
             result = await self.get_eval_run(
-                run_id, project_id=project_id,
+                run_id,
+                project_id=project_id,
             )
 
             if result.status in ("completed", "failed", "cancelled"):
@@ -3283,7 +3513,10 @@ class TaprootClient:
         return [Experiment.from_api_response(e) for e in r.json()]
 
     async def get_experiment(
-        self, experiment_id: str, *, project_id: str | None = None,
+        self,
+        experiment_id: str,
+        *,
+        project_id: str | None = None,
     ) -> Experiment:
         """Get an experiment by ID (includes run_count)."""
         r = await self._request(
@@ -3325,7 +3558,10 @@ class TaprootClient:
         return Experiment.from_api_response(r.json())
 
     async def delete_experiment(
-        self, experiment_id: str, *, project_id: str | None = None,
+        self,
+        experiment_id: str,
+        *,
+        project_id: str | None = None,
     ) -> None:
         """Deactivate an experiment."""
         r = await self._request(
@@ -3335,17 +3571,21 @@ class TaprootClient:
         self._raise_for_status(r, service="evals")
 
     async def compare_experiment_runs(
-        self, experiment_id: str, *, project_id: str | None = None,
+        self,
+        experiment_id: str,
+        *,
+        project_id: str | None = None,
     ) -> dict[str, Any]:
         """Compare all runs within an experiment."""
         r = await self._request(
             "POST",
             self._project_evals_path(
-                f"/experiments/{experiment_id}/compare", project_id,
+                f"/experiments/{experiment_id}/compare",
+                project_id,
             ),
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # Evals-S — Alert Rules
@@ -3399,7 +3639,10 @@ class TaprootClient:
         return [AlertRule.from_api_response(a) for a in r.json()]
 
     async def get_alert_rule(
-        self, rule_id: str, *, project_id: str | None = None,
+        self,
+        rule_id: str,
+        *,
+        project_id: str | None = None,
     ) -> AlertRule:
         """Get an alert rule by ID."""
         r = await self._request(
@@ -3441,7 +3684,10 @@ class TaprootClient:
         return AlertRule.from_api_response(r.json())
 
     async def delete_alert_rule(
-        self, rule_id: str, *, project_id: str | None = None,
+        self,
+        rule_id: str,
+        *,
+        project_id: str | None = None,
     ) -> None:
         """Soft-delete an alert rule."""
         r = await self._request(
@@ -3496,7 +3742,9 @@ class TaprootClient:
         return Webhook.from_api_response(r.json())
 
     async def list_webhooks(
-        self, *, project_id: str | None = None,
+        self,
+        *,
+        project_id: str | None = None,
     ) -> list[Webhook]:
         """List webhooks."""
         r = await self._request(
@@ -3507,7 +3755,10 @@ class TaprootClient:
         return [Webhook.from_api_response(w) for w in r.json()]
 
     async def get_webhook(
-        self, webhook_id: str, *, project_id: str | None = None,
+        self,
+        webhook_id: str,
+        *,
+        project_id: str | None = None,
     ) -> Webhook:
         """Get a webhook by ID."""
         r = await self._request(
@@ -3549,7 +3800,10 @@ class TaprootClient:
         return Webhook.from_api_response(r.json())
 
     async def delete_webhook(
-        self, webhook_id: str, *, project_id: str | None = None,
+        self,
+        webhook_id: str,
+        *,
+        project_id: str | None = None,
     ) -> None:
         """Delete a webhook."""
         r = await self._request(
@@ -3574,7 +3828,8 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_evals_path(
-                f"/webhooks/{webhook_id}/deliveries", project_id,
+                f"/webhooks/{webhook_id}/deliveries",
+                project_id,
             ),
             params=params,
         )
@@ -3592,7 +3847,8 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_evals_path(
-                f"/webhooks/{webhook_id}/deliveries/{delivery_id}", project_id,
+                f"/webhooks/{webhook_id}/deliveries/{delivery_id}",
+                project_id,
             ),
         )
         self._raise_for_status(r, service="evals")
@@ -3614,7 +3870,7 @@ class TaprootClient:
             ),
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # Evals-S — Discovery
@@ -3644,7 +3900,7 @@ class TaprootClient:
             json=body,
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_discovery_sessions(
         self,
@@ -3667,7 +3923,10 @@ class TaprootClient:
         return [DiscoverySession.from_api_response(s) for s in r.json()]
 
     async def get_discovery_session(
-        self, session_id: str, *, project_id: str | None = None,
+        self,
+        session_id: str,
+        *,
+        project_id: str | None = None,
     ) -> DiscoverySession:
         """Get a discovery session by ID."""
         r = await self._request(
@@ -3694,7 +3953,7 @@ class TaprootClient:
             params=params,
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict_list(r)
 
     async def get_discovery_suggestions(
         self,
@@ -3713,7 +3972,8 @@ class TaprootClient:
         r = await self._request(
             "GET",
             self._project_evals_path(
-                f"/discovery/{session_id}/suggestions", project_id,
+                f"/discovery/{session_id}/suggestions",
+                project_id,
             ),
             params=params,
         )
@@ -3764,7 +4024,8 @@ class TaprootClient:
         r = await self._request(
             "POST",
             self._project_evals_path(
-                f"/discovery/{session_id}/suggestions/approve", project_id,
+                f"/discovery/{session_id}/suggestions/approve",
+                project_id,
             ),
             json={
                 "suggestion_ids": suggestion_ids,
@@ -3772,7 +4033,7 @@ class TaprootClient:
             },
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     async def reject_discovery_suggestion(
         self,
@@ -3793,7 +4054,10 @@ class TaprootClient:
         return DiscoverySuggestion.from_api_response(r.json())
 
     async def cancel_discovery(
-        self, session_id: str, *, project_id: str | None = None,
+        self,
+        session_id: str,
+        *,
+        project_id: str | None = None,
     ) -> dict[str, Any]:
         """Cancel a running discovery session.
 
@@ -3805,7 +4069,7 @@ class TaprootClient:
             self._project_evals_path(f"/discovery/{session_id}/cancel", project_id),
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # Evals-S — Traces
@@ -3824,7 +4088,7 @@ class TaprootClient:
             json=otlp_payload,
         )
         self._raise_for_status(r, service="evals")
-        return r.json()
+        return self._json_dict(r)
 
     async def list_traces(
         self,
@@ -3903,7 +4167,10 @@ class TaprootClient:
         return TraceStats.from_api_response(r.json())
 
     async def delete_trace(
-        self, trace_id: str, *, project_id: str | None = None,
+        self,
+        trace_id: str,
+        *,
+        project_id: str | None = None,
     ) -> None:
         """Permanently delete a trace and its spans."""
         r = await self._request(
@@ -4238,7 +4505,9 @@ class TaprootClient:
             service="toolbox",
         )
         self._raise_for_status(
-            r, service="toolbox", project_id=project_id or self.project_id,
+            r,
+            service="toolbox",
+            project_id=project_id or self.project_id,
         )
         return ToolList.from_api_response(r.json())
 
@@ -4409,7 +4678,9 @@ class TaprootClient:
             service="toolbox",
         )
         self._raise_for_status(
-            r, service="toolbox", project_id=project_id or self.project_id,
+            r,
+            service="toolbox",
+            project_id=project_id or self.project_id,
         )
         return ImportResult.from_api_response(r.json())
 
@@ -4457,7 +4728,9 @@ class TaprootClient:
             service="toolbox",
         )
         self._raise_for_status(
-            r, service="toolbox", project_id=project_id or self.project_id,
+            r,
+            service="toolbox",
+            project_id=project_id or self.project_id,
         )
         return MCPRegistryImportResult.from_api_response(r.json())
 
@@ -4487,9 +4760,11 @@ class TaprootClient:
             service="toolbox",
         )
         self._raise_for_status(
-            r, service="toolbox", project_id=project_id or self.project_id,
+            r,
+            service="toolbox",
+            project_id=project_id or self.project_id,
         )
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # ToolBox-S — Credentials
@@ -4837,10 +5112,12 @@ class TaprootClient:
     async def health_toolbox(self) -> dict[str, Any]:
         """Check ToolBox-S service health."""
         r = await self._request(
-            "GET", self._toolbox_path("/health"), service="toolbox",
+            "GET",
+            self._toolbox_path("/health"),
+            service="toolbox",
         )
         self._raise_for_status(r, service="toolbox")
-        return r.json()
+        return self._json_dict(r)
 
     # ==================================================================
     # ToolBox-S — @client.tool() decorator

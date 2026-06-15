@@ -15,18 +15,17 @@ import time
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Literal,
     ParamSpec,
     TypeVar,
-    overload,
+    cast,
 )
 
 from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
+    from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +113,7 @@ def instrument(
 
                 # Propagate correlation ID from context into span
                 from taproot_sdk._context import correlation_id_var
+
                 _cid = correlation_id_var.get(None)
                 if _cid:
                     span.set_attribute("taproot.correlation_id", _cid)
@@ -121,12 +121,8 @@ def instrument(
                 # Capture inputs
                 if not ignore_inputs:
                     try:
-                        inputs_str = _serialize_inputs(
-                            args, kwargs, func_signature, ignore_inputs
-                        )
-                        _set_attribute_safe(
-                            span, "ev.data.inputs", inputs_str, max_attribute_size
-                        )
+                        inputs_str = _serialize_inputs(args, kwargs, func_signature, ignore_inputs)
+                        _set_attribute_safe(span, "ev.data.inputs", inputs_str, max_attribute_size)
                     except Exception as e:
                         logger.debug(f"Failed to serialize inputs: {e}")
 
@@ -165,9 +161,7 @@ def instrument(
                     raise
 
         @functools.wraps(func)
-        async def async_wrapper(
-            *args: P.args, **kwargs: P.kwargs
-        ) -> Coroutine[Any, Any, R]:
+        async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             tracer = trace.get_tracer("taproot-sdk")
             start_time = time.perf_counter()
 
@@ -179,6 +173,7 @@ def instrument(
 
                 # Propagate correlation ID from context into span
                 from taproot_sdk._context import correlation_id_var
+
                 _cid = correlation_id_var.get(None)
                 if _cid:
                     span.set_attribute("taproot.correlation_id", _cid)
@@ -186,18 +181,14 @@ def instrument(
                 # Capture inputs
                 if not ignore_inputs:
                     try:
-                        inputs_str = _serialize_inputs(
-                            args, kwargs, func_signature, ignore_inputs
-                        )
-                        _set_attribute_safe(
-                            span, "ev.data.inputs", inputs_str, max_attribute_size
-                        )
+                        inputs_str = _serialize_inputs(args, kwargs, func_signature, ignore_inputs)
+                        _set_attribute_safe(span, "ev.data.inputs", inputs_str, max_attribute_size)
                     except Exception as e:
                         logger.debug(f"Failed to serialize inputs: {e}")
 
                 try:
                     # Execute async function
-                    result = await func(*args, **kwargs)
+                    result = await cast("Awaitable[R]", func(*args, **kwargs))
 
                     # Record duration
                     duration_ms = (time.perf_counter() - start_time) * 1000
@@ -250,9 +241,7 @@ def _serialize_inputs(
     try:
         bound = signature.bind(*args, **kwargs)
         bound.apply_defaults()
-        inputs = {
-            k: v for k, v in bound.arguments.items() if k not in ignore_params
-        }
+        inputs = {k: v for k, v in bound.arguments.items() if k not in ignore_params}
     except TypeError:
         # Fallback if binding fails
         inputs = {

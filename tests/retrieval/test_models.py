@@ -33,7 +33,6 @@ from taproot_sdk.retrieval.models import (
     StoreStatistics,
 )
 
-
 # ===================================================================
 # Store Models
 # ===================================================================
@@ -226,12 +225,14 @@ class TestAccessRevoked:
 
 class TestQueryHit:
     def test_from_dict(self):
-        h = QueryHit.from_dict({
-            "chunk_id": "c-1",
-            "score": 0.95,
-            "text": "Hello world",
-            "metadata": {"source": "doc.pdf"},
-        })
+        h = QueryHit.from_dict(
+            {
+                "chunk_id": "c-1",
+                "score": 0.95,
+                "text": "Hello world",
+                "metadata": {"source": "doc.pdf"},
+            }
+        )
         assert h.chunk_id == "c-1"
         assert h.score == 0.95
         assert h.metadata["source"] == "doc.pdf"
@@ -308,11 +309,13 @@ class TestJobDetail:
         assert jd.succeeded is False
 
     def test_failed_is_terminal(self):
-        jd = JobDetail.from_api_response({
-            **self.SAMPLE,
-            "status": "failed",
-            "error": "Out of memory",
-        })
+        jd = JobDetail.from_api_response(
+            {
+                **self.SAMPLE,
+                "status": "failed",
+                "error": "Out of memory",
+            }
+        )
         assert jd.is_terminal is True
         assert jd.succeeded is False
         assert jd.error == "Out of memory"
@@ -360,11 +363,13 @@ class TestJobCancelled:
 
 class TestBatchCreated:
     def test_from_api_response(self):
-        bc = BatchCreated.from_api_response({
-            "batch_id": "b-1",
-            "status": "listing",
-            "created_at": "2025-01-01T00:00:00Z",
-        })
+        bc = BatchCreated.from_api_response(
+            {
+                "batch_id": "b-1",
+                "status": "listing",
+                "created_at": "2025-01-01T00:00:00Z",
+            }
+        )
         assert bc.batch_id == "b-1"
 
 
@@ -404,11 +409,13 @@ class TestBatchStatus:
 
 class TestBatchCancelled:
     def test_from_api_response(self):
-        bc = BatchCancelled.from_api_response({
-            "batch_id": "b-1",
-            "status": "cancelled",
-            "cancelled_jobs": 3,
-        })
+        bc = BatchCancelled.from_api_response(
+            {
+                "batch_id": "b-1",
+                "status": "cancelled",
+                "cancelled_jobs": 3,
+            }
+        )
         assert bc.cancelled_jobs == 3
 
 
@@ -419,36 +426,42 @@ class TestBatchCancelled:
 
 class TestDocumentDetail:
     def test_from_api_response(self):
-        dd = DocumentDetail.from_api_response({
-            "doc_id": "doc-1",
-            "store_name": "test_store",
-            "chunk_count": 25,
-            "source": "upload",
-            "first_ingested_at": "2025-01-01T00:00:00Z",
-        })
+        dd = DocumentDetail.from_api_response(
+            {
+                "doc_id": "doc-1",
+                "store_name": "test_store",
+                "chunk_count": 25,
+                "source": "upload",
+                "first_ingested_at": "2025-01-01T00:00:00Z",
+            }
+        )
         assert dd.doc_id == "doc-1"
         assert dd.chunk_count == 25
 
 
 class TestDocumentList:
     def test_from_api_response(self):
-        dl = DocumentList.from_api_response({
-            "documents": [{"doc_id": "d1"}, {"doc_id": "d2"}],
-            "total": 2,
-            "offset": 0,
-            "limit": 20,
-            "has_more": False,
-        })
+        dl = DocumentList.from_api_response(
+            {
+                "documents": [{"doc_id": "d1"}, {"doc_id": "d2"}],
+                "total": 2,
+                "offset": 0,
+                "limit": 20,
+                "has_more": False,
+            }
+        )
         assert len(dl.documents) == 2
 
 
 class TestDocumentDeleted:
     def test_from_api_response(self):
-        dd = DocumentDeleted.from_api_response({
-            "doc_id": "d-1",
-            "store_name": "test",
-            "chunks_deleted": 10,
-        })
+        dd = DocumentDeleted.from_api_response(
+            {
+                "doc_id": "d-1",
+                "store_name": "test",
+                "chunks_deleted": 10,
+            }
+        )
         assert dd.chunks_deleted == 10
 
 
@@ -459,12 +472,14 @@ class TestDocumentDeleted:
 
 class TestChunkInfo:
     def test_from_dict(self):
-        c = ChunkInfo.from_dict({
-            "id": "ck-1",
-            "content": "Hello world",
-            "metadata": {"page": 1},
-            "store_name": "test",
-        })
+        c = ChunkInfo.from_dict(
+            {
+                "id": "ck-1",
+                "content": "Hello world",
+                "metadata": {"page": 1},
+                "store_name": "test",
+            }
+        )
         assert c.id == "ck-1"
         assert c.content == "Hello world"
 
@@ -476,33 +491,39 @@ class TestChunkInfo:
 
 class TestChunkList:
     def test_from_api_response(self):
-        cl = ChunkList.from_api_response({
-            "chunks": [{"id": "c1", "content": "text"}],
-            "total": 1,
-            "offset": 0,
-            "limit": 20,
-            "has_more": False,
-        })
+        cl = ChunkList.from_api_response(
+            {
+                "chunks": [{"id": "c1", "content": "text"}],
+                "total": 1,
+                "offset": 0,
+                "limit": 20,
+                "has_more": False,
+            }
+        )
         assert len(cl.chunks) == 1
 
 
 class TestChunksUploaded:
     def test_from_api_response(self):
-        cu = ChunksUploaded.from_api_response({
-            "store_name": "test",
-            "doc_id": "d1",
-            "chunk_count": 5,
-            "status": "success",
-        })
+        cu = ChunksUploaded.from_api_response(
+            {
+                "store_name": "test",
+                "doc_id": "d1",
+                "chunk_count": 5,
+                "status": "success",
+            }
+        )
         assert cu.chunk_count == 5
 
 
 class TestChunksDeleted:
     def test_from_api_response(self):
-        cd = ChunksDeleted.from_api_response({
-            "store_name": "test",
-            "doc_id": "d1",
-            "chunks_deleted": 5,
-            "status": "success",
-        })
+        cd = ChunksDeleted.from_api_response(
+            {
+                "store_name": "test",
+                "doc_id": "d1",
+                "chunks_deleted": 5,
+                "status": "success",
+            }
+        )
         assert cd.chunks_deleted == 5

@@ -7,8 +7,12 @@ Usage in pytest:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from taproot_sdk.evals.exceptions import EvalAssertionError
-from taproot_sdk.evals.models import EvalResult
+
+if TYPE_CHECKING:
+    from taproot_sdk.evals.models import EvalResult
 
 
 def assert_eval(
