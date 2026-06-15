@@ -13,14 +13,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
-from typing import Any
 from unittest.mock import AsyncMock
-
-import pytest
 
 from taproot_sdk.prompts.cache import PromptCache, _CacheEntry, _make_cache_key
 from taproot_sdk.prompts.models import PromptResponse
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,7 +47,7 @@ def _make_prompt_response(
 def _make_async_fetch(
     response: PromptResponse | None = None,
 ) -> AsyncMock:
-    """Return an ``AsyncMock`` that behaves like ``PromptClient._fetch``."""
+    """Return an ``AsyncMock`` that behaves like a prompt fetch callback."""
     mock = AsyncMock()
     mock.return_value = response or _make_prompt_response()
     return mock

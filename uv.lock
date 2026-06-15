@@ -1245,7 +1245,6 @@ cohere = [
     { name = "opentelemetry-instrumentation-cohere" },
 ]
 dev = [
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1269,7 +1268,6 @@ vertexai = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.25.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.25.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "opentelemetry-api", specifier = ">=1.21.0" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.21.0" },

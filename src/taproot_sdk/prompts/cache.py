@@ -8,19 +8,20 @@ staleness window the caller blocks on a fresh fetch.
 
 Thread safety:
     * Async callers are serialised via ``asyncio.Lock``.
-    * Sync callers are serialised via ``threading.Lock``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 import time
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable
+from typing import TYPE_CHECKING
 
-from taproot_sdk.prompts.models import PromptResponse
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from taproot_sdk.prompts.models import PromptResponse
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,6 @@ class PromptCache:
 
     _store: dict[str, _CacheEntry] = field(default_factory=dict, repr=False)
     _async_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
-    _sync_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _inflight: set[str] = field(default_factory=set, repr=False)
 
     # ------------------------------------------------------------------
@@ -145,68 +145,6 @@ class PromptCache:
 
             # Expired beyond max_stale -- must block on a fresh fetch
             response = await fetch_fn(
-                project_id, name, version=version, label=label
-            )
-            self._store[key] = _CacheEntry(
-                response=response, fetched_at=time.monotonic()
-            )
-            return response
-
-    def get_or_fetch_sync(
-        self,
-        project_id: str,
-        name: str,
-        *,
-        version: int | None = None,
-        label: str | None = None,
-        fetch_fn: Callable[..., PromptResponse],
-    ) -> PromptResponse:
-        """Synchronous variant of :meth:`get_or_fetch`.
-
-        Uses ``threading.Lock`` for safety when called from multiple
-        threads.  Background revalidation is skipped in sync mode --
-        stale entries within the staleness window are returned without
-        scheduling a refresh (the next call will refresh).
-
-        Args:
-            project_id: Project identifier (part of cache key).
-            name: Prompt name (part of cache key).
-            version: Optional pinned version.
-            label: Optional label.
-            fetch_fn: Synchronous callable that performs the real HTTP
-                fetch.  Signature must match
-                ``fetch_fn(project_id, name, *, version, label)``.
-
-        Returns:
-            A ``PromptResponse``.
-        """
-        key = _make_cache_key(project_id, name, version=version, label=label)
-
-        with self._sync_lock:
-            entry = self._store.get(key)
-            now = time.monotonic()
-
-            if entry is None:
-                response = fetch_fn(
-                    project_id, name, version=version, label=label
-                )
-                self._store[key] = _CacheEntry(
-                    response=response, fetched_at=now
-                )
-                return response
-
-            age = now - entry.fetched_at
-
-            if age < self.ttl_seconds:
-                return entry.response
-
-            if age < self.ttl_seconds + self.max_stale_seconds:
-                # Stale but acceptable -- return stale value.
-                # No background revalidation in sync mode.
-                return entry.response
-
-            # Expired -- block on fetch.
-            response = fetch_fn(
                 project_id, name, version=version, label=label
             )
             self._store[key] = _CacheEntry(

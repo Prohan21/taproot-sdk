@@ -61,7 +61,6 @@ dev = [
     "mypy>=1.0.0",
     "ruff>=0.1.0",
     "respx>=0.20.0",
-    "httpx>=0.25.0",
 ]
 
 [project.scripts]
