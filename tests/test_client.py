@@ -161,9 +161,7 @@ class TestTaprootClientLifecycle:
         assert client._http.is_closed
 
     async def test_close(self) -> None:
-        client = TaprootClient(
-            base_url="https://api.test", api_key="k", project_id="p"
-        )
+        client = TaprootClient(base_url="https://api.test", api_key="k", project_id="p")
         assert not client._http.is_closed
         await client.close()
         assert client._http.is_closed
@@ -185,6 +183,7 @@ class TestTaprootInteractionPropagation:
                 correlation_id="corr-1",
                 trace_id="00-trace-span-01",
                 parent_activity_id="act-parent",
+                parent_interaction_id="int-parent",
             )
         )
 
@@ -197,6 +196,7 @@ class TestTaprootInteractionPropagation:
             "X-Taproot-Source-Agent-Id": "agent-1",
             "X-Taproot-Root-Agent-Id": "root-agent",
             "X-Taproot-Parent-Activity-Id": "act-parent",
+            "X-Taproot-Parent-Interaction-Id": "int-1",
             "X-Correlation-ID": "corr-1",
             "traceparent": "00-trace-span-01",
         }
@@ -230,7 +230,9 @@ class TestTaprootInteractionPropagation:
         assert merged["X-Taproot-Interaction-Type"] == "agent_run"
         assert merged["X-Correlation-ID"] == "corr-new"
 
-    async def test_taproot_client_propagates_current_context_without_overwriting_headers(self) -> None:
+    async def test_taproot_client_propagates_current_context_without_overwriting_headers(
+        self,
+    ) -> None:
         client = TaprootClient(
             base_url="https://api.test",
             api_key="k",
@@ -246,6 +248,7 @@ class TestTaprootInteractionPropagation:
                 interaction_type="agent_run",
                 caller=TaprootActorRef(actor_type="user", actor_id="user-1"),
                 correlation_id="corr-context",
+                parent_interaction_id="int-parent",
             )
         )
         try:
@@ -263,6 +266,7 @@ class TestTaprootInteractionPropagation:
         assert headers["X-Taproot-Interaction-Id"] == "int-1"
         assert headers["X-Taproot-Interaction-Type"] == "agent_run"
         assert headers["X-Taproot-Caller-Id"] == "user-1"
+        assert headers["X-Taproot-Parent-Interaction-Id"] == "int-1"
         assert headers["X-Agent-Id"] == "agent-sdk"
         assert headers["X-Correlation-ID"] == "corr-explicit"
         assert headers["Idempotency-Key"] == "idem-1"
@@ -287,6 +291,7 @@ class TestTaprootInteractionPropagation:
                     (b"x-taproot-source-agent-id", b"agent-1"),
                     (b"x-taproot-root-agent-id", b"root-agent"),
                     (b"x-taproot-parent-activity-id", b"act-parent"),
+                    (b"x-taproot-parent-interaction-id", b"int-parent"),
                     (b"x-correlation-id", b"corr-1"),
                     (b"traceparent", b"00-trace-span-01"),
                 ],
@@ -304,11 +309,14 @@ class TestTaprootInteractionPropagation:
         assert context.root_agent_id == "root-agent"
         assert context.correlation_id == "corr-1"
         assert context.trace_id == "00-trace-span-01"
+        assert context.parent_activity_id == "int-1"
         assert context.parent_interaction_id == "int-1"
         assert correlation_id_var.get() is None
         assert get_interaction_context() is None
 
-    async def test_retry_headers_are_stable_across_attempts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_retry_headers_are_stable_across_attempts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         client = TaprootClient(
             base_url="https://api.test",
             api_key="k",
@@ -373,5 +381,3 @@ class TestTaprootInteractionPropagation:
         assert first_headers["Idempotency-Key"] == "idem-1"
         assert first_headers["Authorization"] == "Bearer token"
         assert first_headers["x-api-key"] == "auth-explicit"
-
-
