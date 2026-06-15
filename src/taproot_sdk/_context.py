@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -24,6 +25,7 @@ HEADER_CALLER_TYPE = "X-Taproot-Caller-Type"
 HEADER_SOURCE_AGENT_ID = "X-Taproot-Source-Agent-Id"
 HEADER_ROOT_AGENT_ID = "X-Taproot-Root-Agent-Id"
 HEADER_PARENT_ACTIVITY_ID = "X-Taproot-Parent-Activity-Id"
+HEADER_PARENT_INTERACTION_ID = "X-Taproot-Parent-Interaction-Id"
 HEADER_CORRELATION_ID = "X-Correlation-ID"
 HEADER_TRACEPARENT = "traceparent"
 
@@ -48,10 +50,10 @@ class TaprootInteractionContext:
     correlation_id: str | None = None
     trace_id: str | None = None
     parent_activity_id: str | None = None
+    parent_interaction_id: str | None = None
 
-correlation_id_var: ContextVar[str | None] = ContextVar(
-    "taproot_correlation_id", default=None
-)
+
+correlation_id_var: ContextVar[str | None] = ContextVar("taproot_correlation_id", default=None)
 
 interaction_context_var: ContextVar[TaprootInteractionContext | None] = ContextVar(
     "taproot_activity_interaction_context",
@@ -108,12 +110,21 @@ def propagation_headers(
         headers[HEADER_ROOT_AGENT_ID] = current.root_agent_id
     if current.parent_activity_id:
         headers[HEADER_PARENT_ACTIVITY_ID] = current.parent_activity_id
+    # ponytail: legacy interaction header stays for mixed deploys; new receivers
+    # mint their own interaction and use this parent header for the tree edge.
+    headers[HEADER_PARENT_INTERACTION_ID] = current.interaction_id
     if current.correlation_id:
         headers[HEADER_CORRELATION_ID] = current.correlation_id
     if current.trace_id:
         headers[HEADER_TRACEPARENT] = current.trace_id
 
     return headers
+
+
+def create_interaction_id() -> str:
+    """Create an SDK-local interaction identity."""
+
+    return str(uuid4())
 
 
 def merge_propagation_headers(
