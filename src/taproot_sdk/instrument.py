@@ -31,8 +31,6 @@ from taproot_sdk._context import (
     HEADER_CALLER_TYPE,
     HEADER_CORRELATION_ID,
     HEADER_INTERACTION_ID,
-    HEADER_INTERACTION_TYPE,
-    HEADER_PARENT_ACTIVITY_ID,
     HEADER_ROOT_AGENT_ID,
     HEADER_SOURCE_AGENT_ID,
     HEADER_TRACEPARENT,
@@ -67,7 +65,9 @@ class _TaprootContextMiddleware:
         cid = cid_header if cid_header else str(uuid.uuid4())
 
         correlation_token = correlation_id_var.set(cid)
-        interaction_token = interaction_context_var.set(_context_from_headers(headers, cid))
+        interaction_token = interaction_context_var.set(
+            _context_from_headers(headers, cid)
+        )
         try:
             await self.app(scope, receive, send)
         finally:
@@ -79,8 +79,8 @@ def _context_from_headers(
     headers: dict[str, str],
     correlation_id: str,
 ) -> TaprootInteractionContext | None:
-    interaction_id = headers.get(HEADER_INTERACTION_ID.lower())
-    if not interaction_id:
+    upstream_interaction_id = headers.get(HEADER_INTERACTION_ID.lower())
+    if not upstream_interaction_id:
         return None
 
     caller_id = headers.get(HEADER_CALLER_ID.lower())
@@ -92,14 +92,14 @@ def _context_from_headers(
     )
 
     return TaprootInteractionContext(
-        interaction_id=interaction_id,
-        interaction_type=headers.get(HEADER_INTERACTION_TYPE.lower(), "sdk_operation"),
+        interaction_id=str(uuid.uuid4()),
+        interaction_type="sdk_operation",
         caller=caller,
         source_agent_id=headers.get(HEADER_SOURCE_AGENT_ID.lower()),
         root_agent_id=headers.get(HEADER_ROOT_AGENT_ID.lower()),
         correlation_id=correlation_id,
         trace_id=headers.get(HEADER_TRACEPARENT.lower()),
-        parent_activity_id=headers.get(HEADER_PARENT_ACTIVITY_ID.lower()),
+        parent_activity_id=upstream_interaction_id,
     )
 
 

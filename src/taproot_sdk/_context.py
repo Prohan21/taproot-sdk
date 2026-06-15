@@ -24,6 +24,7 @@ HEADER_CALLER_TYPE = "X-Taproot-Caller-Type"
 HEADER_SOURCE_AGENT_ID = "X-Taproot-Source-Agent-Id"
 HEADER_ROOT_AGENT_ID = "X-Taproot-Root-Agent-Id"
 HEADER_PARENT_ACTIVITY_ID = "X-Taproot-Parent-Activity-Id"
+HEADER_PARENT_INTERACTION_ID = HEADER_PARENT_ACTIVITY_ID
 HEADER_CORRELATION_ID = "X-Correlation-ID"
 HEADER_TRACEPARENT = "traceparent"
 
@@ -38,7 +39,10 @@ class TaprootActorRef:
 
 @dataclass(frozen=True)
 class TaprootInteractionContext:
-    """SDK-local TAP-38 interaction context for outbound header propagation."""
+    """SDK-local TAP-38 interaction context for outbound header propagation.
+
+    ``parent_activity_id`` is the v1 wire name for upstream parent interaction.
+    """
 
     interaction_id: str
     interaction_type: str = "sdk_operation"
@@ -48,6 +52,13 @@ class TaprootInteractionContext:
     correlation_id: str | None = None
     trace_id: str | None = None
     parent_activity_id: str | None = None
+
+    @property
+    def parent_interaction_id(self) -> str | None:
+        """Compatibility alias for the upstream parent interaction ID."""
+
+        return self.parent_activity_id
+
 
 correlation_id_var: ContextVar[str | None] = ContextVar(
     "taproot_correlation_id", default=None
@@ -88,7 +99,10 @@ def clear_interaction_context() -> None:
 def propagation_headers(
     context: TaprootInteractionContext | None = None,
 ) -> dict[str, str]:
-    """Build outbound TAP-38 propagation headers for a context."""
+    """Build outbound TAP-38 propagation headers for a context.
+
+    ``HEADER_PARENT_ACTIVITY_ID`` carries parent-interaction semantics in v1.
+    """
 
     current = context or get_interaction_context()
     if current is None:
