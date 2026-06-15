@@ -33,12 +33,14 @@ from taproot_sdk._context import (
     HEADER_INTERACTION_ID,
     HEADER_INTERACTION_TYPE,
     HEADER_PARENT_ACTIVITY_ID,
+    HEADER_PARENT_INTERACTION_ID,
     HEADER_ROOT_AGENT_ID,
     HEADER_SOURCE_AGENT_ID,
     HEADER_TRACEPARENT,
     TaprootActorRef,
     TaprootInteractionContext,
     correlation_id_var,
+    create_interaction_id,
     interaction_context_var,
 )
 
@@ -80,7 +82,8 @@ def _context_from_headers(
     correlation_id: str,
 ) -> TaprootInteractionContext | None:
     interaction_id = headers.get(HEADER_INTERACTION_ID.lower())
-    if not interaction_id:
+    parent_interaction_id = headers.get(HEADER_PARENT_INTERACTION_ID.lower())
+    if not interaction_id and not parent_interaction_id:
         return None
 
     caller_id = headers.get(HEADER_CALLER_ID.lower())
@@ -92,7 +95,7 @@ def _context_from_headers(
     )
 
     return TaprootInteractionContext(
-        interaction_id=interaction_id,
+        interaction_id=create_interaction_id(),
         interaction_type=headers.get(HEADER_INTERACTION_TYPE.lower(), "sdk_operation"),
         caller=caller,
         source_agent_id=headers.get(HEADER_SOURCE_AGENT_ID.lower()),
@@ -100,6 +103,7 @@ def _context_from_headers(
         correlation_id=correlation_id,
         trace_id=headers.get(HEADER_TRACEPARENT.lower()),
         parent_activity_id=headers.get(HEADER_PARENT_ACTIVITY_ID.lower()),
+        parent_interaction_id=parent_interaction_id or interaction_id,
     )
 
 
