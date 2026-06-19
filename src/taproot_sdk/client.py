@@ -619,9 +619,9 @@ class TaprootClient:
     ) -> SessionCreated:
         """Create a new worker session.
 
-        Note: In production, session creation is called by Front-S backend
-        via trusted proxy, not directly by SDK consumers. Provided here for
-        testing and direct-mode use.
+        Note: In production, session creation is normally called by the Front-S
+        backend, not directly by SDK consumers. Provided here for testing and
+        direct-mode use.
         """
         from taproot_sdk.workers.models import SessionCreated
 
