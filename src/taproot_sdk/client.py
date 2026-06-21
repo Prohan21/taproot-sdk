@@ -543,7 +543,7 @@ class TaprootClient:
         """Build Retrieval-S path."""
         if self.direct_mode:
             return f"/api/v1{path}"
-        return f"/api/v1/retrieval/api/v1{path}"
+        return f"/api/v1/retrieval{path}"
 
     def _guardrail_path(self, path: str) -> str:
         """Build Guardrail-S path."""

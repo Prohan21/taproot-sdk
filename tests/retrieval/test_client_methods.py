@@ -59,7 +59,7 @@ class TestCreateStore:
     @respx.mock
     @pytest.mark.asyncio
     async def test_create_store_returns_typed(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores").mock(
             return_value=_json_resp({
                 "store": {"id": "s-1", "name": "my_store"},
                 "message": "Store created",
@@ -74,7 +74,7 @@ class TestCreateStore:
     @respx.mock
     @pytest.mark.asyncio
     async def test_create_store_conflict_raises(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores").mock(
             return_value=httpx.Response(409, json={"detail": "already exists"})
         )
         c = _client()
@@ -86,7 +86,7 @@ class TestListStores:
     @respx.mock
     @pytest.mark.asyncio
     async def test_list_stores(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores").mock(
             return_value=_json_resp({
                 "stores": [{"id": "1", "name": "a"}, {"id": "2", "name": "b"}],
                 "total": 2,
@@ -105,7 +105,7 @@ class TestGetStore:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_store(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s-1").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s-1").mock(
             return_value=_json_resp({"id": "s-1", "name": "test_store"})
         )
         c = _client()
@@ -116,7 +116,7 @@ class TestGetStore:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_store_not_found(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/missing").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/missing").mock(
             return_value=httpx.Response(404, json={"detail": "Store not found"})
         )
         c = _client()
@@ -128,7 +128,7 @@ class TestDeleteStore:
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_store(self):
-        respx.delete(f"{BASE}/api/v1/retrieval/api/v1/stores/s-1").mock(
+        respx.delete(f"{BASE}/api/v1/retrieval/stores/s-1").mock(
             return_value=_json_resp({"success": True, "message": "Store deleted"})
         )
         c = _client()
@@ -141,7 +141,7 @@ class TestGetStoreStats:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_store_stats(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/my_store/stats").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/my_store/stats").mock(
             return_value=_json_resp({
                 "store_name": "my_store",
                 "chunk_count": 500,
@@ -167,7 +167,7 @@ class TestRetrievalQuery:
     @respx.mock
     @pytest.mark.asyncio
     async def test_basic_query(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/test_store/query").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores/test_store/query").mock(
             return_value=_json_resp({
                 "hits": [
                     {"chunk_id": "c1", "score": 0.95, "text": "relevant"},
@@ -186,7 +186,7 @@ class TestRetrievalQuery:
     @respx.mock
     @pytest.mark.asyncio
     async def test_query_auth_error(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/private/query").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores/private/query").mock(
             return_value=httpx.Response(403, json={"detail": "Access denied"})
         )
         c = _client()
@@ -196,7 +196,7 @@ class TestRetrievalQuery:
     @respx.mock
     @pytest.mark.asyncio
     async def test_query_with_hybrid_mode(self):
-        route = respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/query").mock(
+        route = respx.post(f"{BASE}/api/v1/retrieval/stores/s/query").mock(
             return_value=_json_resp({"hits": [], "total_hits": 0, "search_time_ms": 1.0})
         )
         c = _client()
@@ -219,7 +219,7 @@ class TestIngestDocument:
     @respx.mock
     @pytest.mark.asyncio
     async def test_ingest(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores/s/ingest").mock(
             return_value=_json_resp({"job_id": "j-1", "status": "pending"})
         )
         c = _client()
@@ -232,7 +232,7 @@ class TestIngestDocument:
     @respx.mock
     @pytest.mark.asyncio
     async def test_ingest_validation_error(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores/s/ingest").mock(
             return_value=httpx.Response(422, json={
                 "detail": [{"loc": ["body", "source_uri"], "msg": "required"}],
             })
@@ -246,7 +246,7 @@ class TestGetIngestionJob:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_job(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest/j-1").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s/ingest/j-1").mock(
             return_value=_json_resp({
                 "job_id": "j-1",
                 "status": "completed",
@@ -269,7 +269,7 @@ class TestListIngestionJobs:
     @respx.mock
     @pytest.mark.asyncio
     async def test_list_jobs(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest/jobs").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s/ingest/jobs").mock(
             return_value=_json_resp({
                 "items": [{"job_id": "j-1", "status": "completed"}],
                 "total": 1,
@@ -288,7 +288,7 @@ class TestCancelIngestionJob:
     @respx.mock
     @pytest.mark.asyncio
     async def test_cancel(self):
-        respx.delete(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest/j-1").mock(
+        respx.delete(f"{BASE}/api/v1/retrieval/stores/s/ingest/j-1").mock(
             return_value=_json_resp({"job_id": "j-1", "status": "cancelled"})
         )
         c = _client()
@@ -306,7 +306,7 @@ class TestBatchIngest:
     @respx.mock
     @pytest.mark.asyncio
     async def test_batch_ingest(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest/batch").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores/s/ingest/batch").mock(
             return_value=_json_resp({
                 "batch_id": "b-1",
                 "status": "listing",
@@ -325,7 +325,7 @@ class TestGetBatchStatus:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_status(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest/batch/b-1").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s/ingest/batch/b-1").mock(
             return_value=_json_resp({
                 "batch_id": "b-1",
                 "status": "completed",
@@ -348,7 +348,7 @@ class TestCancelBatch:
     @respx.mock
     @pytest.mark.asyncio
     async def test_cancel(self):
-        respx.delete(f"{BASE}/api/v1/retrieval/api/v1/stores/s/ingest/batch/b-1").mock(
+        respx.delete(f"{BASE}/api/v1/retrieval/stores/s/ingest/batch/b-1").mock(
             return_value=_json_resp({
                 "batch_id": "b-1",
                 "status": "cancelled",
@@ -370,7 +370,7 @@ class TestListDocuments:
     @respx.mock
     @pytest.mark.asyncio
     async def test_list_documents(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s/documents").mock(
             return_value=_json_resp({
                 "documents": [{"doc_id": "d1"}, {"doc_id": "d2"}],
                 "total": 2,
@@ -389,7 +389,7 @@ class TestGetDocument:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_document(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents/d-1").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s/documents/d-1").mock(
             return_value=_json_resp({
                 "doc_id": "d-1",
                 "store_name": "s",
@@ -406,7 +406,7 @@ class TestDeleteDocument:
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_document(self):
-        respx.delete(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents/d-1").mock(
+        respx.delete(f"{BASE}/api/v1/retrieval/stores/s/documents/d-1").mock(
             return_value=_json_resp({
                 "doc_id": "d-1",
                 "store_name": "s",
@@ -423,7 +423,7 @@ class TestDocumentOperations:
     @respx.mock
     @pytest.mark.asyncio
     async def test_create_document_operation(self):
-        route = respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents").mock(
+        route = respx.post(f"{BASE}/api/v1/retrieval/stores/s/documents").mock(
             return_value=_json_resp({
                 "operation_id": "idem-1",
                 "operation": "create",
@@ -451,7 +451,7 @@ class TestDocumentOperations:
     @respx.mock
     @pytest.mark.asyncio
     async def test_replace_document_operation(self):
-        route = respx.put(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents").mock(
+        route = respx.put(f"{BASE}/api/v1/retrieval/stores/s/documents").mock(
             return_value=_json_resp({
                 "operation_id": "op-1",
                 "operation": "replace",
@@ -477,7 +477,7 @@ class TestDocumentOperations:
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_document_by_selector_operation(self):
-        route = respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/documents/delete").mock(
+        route = respx.post(f"{BASE}/api/v1/retrieval/stores/s/documents/delete").mock(
             return_value=_json_resp({
                 "operation_id": "op-1",
                 "operation": "delete",
@@ -502,7 +502,7 @@ class TestUploadChunks:
     @respx.mock
     @pytest.mark.asyncio
     async def test_upload(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/chunks").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores/s/chunks").mock(
             return_value=_json_resp({
                 "store_name": "s",
                 "doc_id": "d1",
@@ -524,7 +524,7 @@ class TestListChunks:
     @respx.mock
     @pytest.mark.asyncio
     async def test_list_chunks(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s/chunks").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s/chunks").mock(
             return_value=_json_resp({
                 "chunks": [{"id": "c1", "content": "text"}],
                 "total": 1,
@@ -543,7 +543,7 @@ class TestGetChunk:
     @respx.mock
     @pytest.mark.asyncio
     async def test_get_chunk(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/s/chunks/c-1").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/s/chunks/c-1").mock(
             return_value=_json_resp({
                 "id": "c-1",
                 "content": "Hello world",
@@ -561,7 +561,7 @@ class TestDeleteChunks:
     @respx.mock
     @pytest.mark.asyncio
     async def test_delete_chunks(self):
-        respx.delete(f"{BASE}/api/v1/retrieval/api/v1/stores/s/chunks").mock(
+        respx.delete(f"{BASE}/api/v1/retrieval/stores/s/chunks").mock(
             return_value=_json_resp({
                 "store_name": "s",
                 "doc_id": "d1",
@@ -586,7 +586,7 @@ class TestErrorVerbosity:
     @respx.mock
     @pytest.mark.asyncio
     async def test_auth_error_includes_service_and_url(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores/s/query").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores/s/query").mock(
             return_value=httpx.Response(401, json={"detail": "Invalid API key"})
         )
         c = _client()
@@ -598,7 +598,7 @@ class TestErrorVerbosity:
     @respx.mock
     @pytest.mark.asyncio
     async def test_validation_error_includes_field_details(self):
-        respx.post(f"{BASE}/api/v1/retrieval/api/v1/stores").mock(
+        respx.post(f"{BASE}/api/v1/retrieval/stores").mock(
             return_value=httpx.Response(422, json={
                 "detail": [
                     {"loc": ["body", "name"], "msg": "does not match pattern", "type": "value_error"},
@@ -614,7 +614,7 @@ class TestErrorVerbosity:
     @respx.mock
     @pytest.mark.asyncio
     async def test_404_error_is_descriptive(self):
-        respx.get(f"{BASE}/api/v1/retrieval/api/v1/stores/nonexistent/stats").mock(
+        respx.get(f"{BASE}/api/v1/retrieval/stores/nonexistent/stats").mock(
             return_value=httpx.Response(404, json={"detail": "Store 'nonexistent' not found"})
         )
         c = _client()
