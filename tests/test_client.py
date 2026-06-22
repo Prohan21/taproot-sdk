@@ -264,12 +264,43 @@ class TestTaprootInteractionPropagation:
         _, _, kwargs = client._http.request.mock_calls[0]
         headers = kwargs["headers"]
         assert headers["X-Taproot-Interaction-Id"] == "int-1"
-        assert headers["X-Taproot-Interaction-Type"] == "agent_run"
-        assert headers["X-Taproot-Caller-Id"] == "user-1"
-        assert headers["X-Taproot-Parent-Interaction-Id"] == "int-1"
         assert headers["X-Agent-Id"] == "agent-sdk"
         assert headers["X-Correlation-ID"] == "corr-explicit"
         assert headers["Idempotency-Key"] == "idem-1"
+        assert "X-Taproot-Interaction-Type" not in headers
+        assert "X-Taproot-Caller-Id" not in headers
+        assert "X-Taproot-Parent-Interaction-Id" not in headers
+
+    async def test_taproot_client_direct_mode_propagates_full_tap_context(self) -> None:
+        client = TaprootClient(
+            base_url="https://api.test",
+            api_key="k",
+            project_id="p",
+            direct_mode=True,
+        )
+        client._http = AsyncMock()
+        client._http.request.return_value = httpx.Response(status_code=200)
+
+        token = set_interaction_context(
+            TaprootInteractionContext(
+                interaction_id="int-1",
+                interaction_type="agent_run",
+                caller=TaprootActorRef(actor_type="user", actor_id="user-1"),
+                correlation_id="corr-context",
+                parent_interaction_id="int-parent",
+            )
+        )
+        try:
+            await client._request("GET", "/v1/test")
+        finally:
+            reset_interaction_context(token)
+            clear_interaction_context()
+
+        headers = client._http.request.mock_calls[0].kwargs["headers"]
+        assert headers["X-Taproot-Interaction-Id"] == "int-1"
+        assert headers["X-Taproot-Interaction-Type"] == "agent_run"
+        assert headers["X-Taproot-Caller-Id"] == "user-1"
+        assert headers["X-Taproot-Parent-Interaction-Id"] == "int-1"
 
     async def test_asgi_instrumentation_binds_inbound_interaction_as_parent_and_resets(self) -> None:
         observed: dict[str, Any] = {}
@@ -373,11 +404,11 @@ class TestTaprootInteractionPropagation:
         second_headers = client._http.request.mock_calls[1].kwargs["headers"]
         assert first_headers == second_headers
         assert first_headers["X-Taproot-Interaction-Id"] == "int-1"
-        assert first_headers["X-Taproot-Interaction-Type"] == "agent_run"
-        assert first_headers["X-Taproot-Caller-Id"] == "caller-explicit"
-        assert first_headers["X-Taproot-Caller-Type"] == "user"
         assert first_headers["X-Agent-Id"] == "agent-sdk"
         assert first_headers["X-Correlation-ID"] == "corr-explicit"
         assert first_headers["Idempotency-Key"] == "idem-1"
         assert first_headers["Authorization"] == "Bearer token"
         assert first_headers["x-api-key"] == "auth-explicit"
+        assert "X-Taproot-Interaction-Type" not in first_headers
+        assert "X-Taproot-Caller-Id" not in first_headers
+        assert "X-Taproot-Caller-Type" not in first_headers

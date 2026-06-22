@@ -34,7 +34,9 @@ import httpx
 
 from taproot_sdk._context import (
     HEADER_CORRELATION_ID,
+    HEADER_INTERACTION_ID,
     correlation_id_var,
+    get_interaction_context,
     merge_propagation_headers,
 )
 from taproot_sdk.core import get_config, is_initialized
@@ -308,7 +310,29 @@ class TaprootClient:
         if _cid and HEADER_CORRELATION_ID.lower() not in existing:
             merged[HEADER_CORRELATION_ID] = _cid
 
+        if not self.direct_mode:
+            return self._public_apim_propagation_headers(merged)
+
         return merge_propagation_headers(merged)
+
+    @staticmethod
+    def _public_apim_propagation_headers(headers: dict[str, str]) -> dict[str, str]:
+        merged = {
+            key: value
+            for key, value in headers.items()
+            if key.lower() in {HEADER_INTERACTION_ID.lower(), HEADER_CORRELATION_ID.lower()}
+            or (
+                not key.lower().startswith("x-taproot-")
+                and key.lower() not in {"baggage", "x-actor-identity", "x-api-key-id"}
+            )
+        }
+        existing = {key.lower() for key in merged}
+        context = get_interaction_context()
+        if context and HEADER_INTERACTION_ID.lower() not in existing:
+            merged[HEADER_INTERACTION_ID] = context.interaction_id
+        if context and context.correlation_id and HEADER_CORRELATION_ID.lower() not in existing:
+            merged[HEADER_CORRELATION_ID] = context.correlation_id
+        return merged
 
     def _raise_for_status(
         self,
