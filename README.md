@@ -1,6 +1,8 @@
 # Taproot SDK
 
-Instrumentation SDK for the Taproot observability platform. Trace LLM calls and custom functions with OpenTelemetry.
+Developer SDK for integrating applications with Taproot. It provides OpenTelemetry-based instrumentation, typed service clients, and correlation metadata needed for traces, evaluations, diagnosis, and System of Record linkage.
+
+The SDK is the adoption edge: it should make Taproot easy to add to customer code without turning SDK-provided metadata into authorization or audit authority.
 
 ## Secret Handling Rule
 
@@ -18,6 +20,8 @@ Only isolated, approval-gated bootstrap/rotation/operator jobs may handle secret
 - **Automatic LLM Tracing**: Auto-instrument OpenAI, Anthropic, Google, Cohere, and more
 - **Decorator-based Instrumentation**: Simple `@instrument()` decorator for custom functions
 - **OpenTelemetry Native**: Built on OTLP for compatibility with any OTel backend
+- **Typed Service Client**: Async helpers for prompts, retrieval, toolbox, guardrails, evals, and workers
+- **Correlation Context**: Propagate interaction, trace, and agent lineage hints for diagnosis
 - **Minimal Overhead**: Async batching, <0.5ms per span
 - **Type Safe**: Full type hints and `py.typed` marker
 
@@ -128,16 +132,16 @@ Auto-instrumentation is available for:
 # Clone and install dev dependencies
 git clone https://github.com/taproot-ai/taproot-sdk.git
 cd taproot-sdk
-pip install -e ".[dev,all]"
+uv pip install -e ".[dev,all]"
 
 # Run tests
-pytest
+uv run pytest
 
 # Type checking
-mypy src/
+uv run mypy src/
 
 # Linting
-ruff check src/
+uv run ruff check src/
 ```
 
 ## License

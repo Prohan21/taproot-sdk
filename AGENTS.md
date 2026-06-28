@@ -2,9 +2,15 @@
 
 This file provides guidance to Codex when working in `taproot-sdk/`. It is adapted from the local `CLAUDE.md`.
 
+## Product Role
+
+`taproot-sdk` is Taproot's developer integration edge. It makes adoption low-friction by instrumenting customer code, exposing typed service clients, and propagating correlation/interaction metadata needed for tracing, evaluation, diagnosis, and System of Record linkage.
+
+SDK metadata is not authority. It may help group traces and diagnose failures, but auth, project scope, and audit authority must come from server-side trust boundaries.
+
 ## Library Overview
 
-`taproot-sdk` is the Python SDK for Taproot. It combines:
+`taproot-sdk` combines:
 - OpenTelemetry-based instrumentation via `@instrument()` and provider auto-instrumentors
 - `TaprootClient`, a unified async client across Taproot services
 - The `taproot-tools` CLI for toolbox-oriented workflows
@@ -48,6 +54,9 @@ Important behaviors:
 - `TaprootClient` supports APIM mode and direct mode with different routing and auth headers.
 - Prompt fetching uses stale-while-revalidate caching.
 - The OTLP JSON exporter exists specifically to avoid protobuf issues with AWS API Gateway v1.
+- SDKs may propagate `X-Taproot-Interaction-Id`, source/root agent lineage, correlation IDs, and trace metadata as lineage hints.
+- Do not expand deprecated `X-Taproot-Caller-*` behavior without resolving the platform contract first.
+- Retrieval client methods should preserve high-level create, full-replace, delete, and selector-delete intent. Create/replace/delete-by-selector flows should send idempotency keys.
 
 ## Editing Guidance
 
@@ -55,3 +64,4 @@ Important behaviors:
 - Preserve public SDK contracts, exception mappings, and immutable model semantics.
 - Keep instrumentation provider-agnostic and avoid coupling decorators to specific LLM libraries.
 - When changing client methods, consider APIM paths, direct-mode paths, and typed model parsing together.
+- Treat caller identity, interaction IDs, and agent lineage as diagnostic context, never authorization.
