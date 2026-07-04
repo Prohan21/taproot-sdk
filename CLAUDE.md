@@ -245,10 +245,12 @@ JsonOtlpSpanExporter(
     headers: dict[str, str] | None = None,
     compress: bool = True,
     timeout: float = 30.0,
+    max_retries: int = 3,
+    retry_backoff: float = 0.5,
 )
 ```
 
-**Returns** `SpanExportResult.SUCCESS` on 2xx, `SpanExportResult.FAILURE` on non-2xx or exception.
+**Returns** `SpanExportResult.SUCCESS` on 2xx. Transient failures (429/5xx, connection errors) are retried with bounded exponential backoff; other 4xx are permanent. On give-up the batch is dropped, the monotonic `spans_dropped_total` counter is incremented, and `otlp_json.spans_dropped` is logged. `force_flush()` is a documented truthful no-op (no internal buffer; `BatchSpanProcessor` owns queueing). `shutdown()` closes the persistent `httpx.Client`.
 
 ## TaprootClient (client.py)
 
@@ -741,7 +743,7 @@ ev.init(
     api_url="https://gateway.taproot.dev",  # Required -- APIM gateway URL
     api_key="sk-...",                  # Optional -- raw API key
     auto_instrument=["openai"],        # Optional -- LLM libraries to auto-instrument
-    redact_by_default=True,            # Optional (default True)
+    redact_by_default=True,            # Optional (default True) -- scrub PII/secrets in @instrument spans
     sampling_rate=1.0,                 # Optional (default 1.0) -- 0.0 to 1.0
     batch_size=512,                    # Optional -- spans per export batch
     flush_interval_ms=5000,            # Optional -- max time between flushes
@@ -841,7 +843,9 @@ mypy src/                          # Strict mode type checking
 | Directory | What it tests |
 |-----------|---------------|
 | `tests/test_core.py` | init(), shutdown(), get_tracer() |
-| `tests/test_decorators.py` | @instrument() sync/async/error/truncation |
+| `tests/test_decorators.py` | @instrument() sync/async/error/truncation/redaction |
+| `tests/test_redaction.py` | PII/secret scrubbing (`_redaction.py`) |
+| `tests/test_otlp_json_exporter.py` | Exporter retry classification, drop counter, flush |
 | `tests/test_auto_instrument.py` | Auto-instrumentation setup/teardown |
 | `tests/test_client.py` | TaprootClient constructor, routing, retries |
 | `tests/test_exceptions.py` | Exception hierarchy, message formatting |
@@ -850,6 +854,7 @@ mypy src/                          # Strict mode type checking
 | `tests/prompts/` | PromptResponse, cache, rendering, A/B testing |
 | `tests/retrieval/` | Retrieval models, client methods |
 | `tests/toolbox/` | ToolInfo, CLI, tool decorator, OAuth, usage |
+| `tests/workers/` | Worker-S session client methods |
 
 ## Integration Patterns
 
