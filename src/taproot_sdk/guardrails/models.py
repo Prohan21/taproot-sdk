@@ -96,6 +96,10 @@ class GuardrailResponse:
     request_id: str = ""
     shadow_verdict: dict[str, Any] | None = None
     review_id: str | None = None
+    # WO-005 degraded-mode contract: high-assurance callers SHOULD treat
+    # degraded=True as fail-closed. Defaults preserve older-server responses.
+    degraded: bool = False
+    unevaluated: tuple[str, ...] = ()
 
     # ---- convenience helpers ----
 
@@ -144,4 +148,6 @@ class GuardrailResponse:
             request_id=data.get("request_id", ""),
             shadow_verdict=data.get("shadow_verdict"),
             review_id=data.get("review_id"),
+            degraded=data.get("degraded", False),
+            unevaluated=tuple(data.get("unevaluated", ())),
         )

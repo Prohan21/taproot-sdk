@@ -470,6 +470,8 @@ response.total_latency_ms  # float
 response.request_id        # str
 response.shadow_verdict    # dict[str, Any] | None -- for A/B testing
 response.review_id         # str | None -- for HITL
+response.degraded          # bool -- True when scanning was incomplete (WO-005); treat as fail-closed in high-assurance flows
+response.unevaluated       # tuple[str, ...] -- scanner ids / policy segment ids not trustworthily evaluated
 ```
 
 ### ScannerSignal Model
