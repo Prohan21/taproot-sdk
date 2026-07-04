@@ -35,7 +35,9 @@ import httpx
 from taproot_sdk._context import (
     HEADER_CORRELATION_ID,
     HEADER_INTERACTION_ID,
+    TaprootInteractionContext,
     correlation_id_var,
+    create_interaction_id,
     get_interaction_context,
     merge_propagation_headers,
 )
@@ -171,6 +173,7 @@ class TaprootClient:
         self.project_id = project_id or config.get("project_id", "")
         self.direct_mode = direct_mode
         self._agent_id = agent_id
+        self._fallback_interaction_context: TaprootInteractionContext | None = None
 
         if not self.base_url:
             raise ValueError(
@@ -310,13 +313,29 @@ class TaprootClient:
         if _cid and HEADER_CORRELATION_ID.lower() not in existing:
             merged[HEADER_CORRELATION_ID] = _cid
 
+        context = get_interaction_context() or self._session_interaction_context()
         if not self.direct_mode:
-            return self._public_apim_propagation_headers(merged)
+            return self._public_apim_propagation_headers(merged, context)
 
-        return merge_propagation_headers(merged)
+        return merge_propagation_headers(merged, context=context)
+
+    def _session_interaction_context(self) -> TaprootInteractionContext:
+        """Fallback context so the header is always present (WO-002 T3).
+
+        A middleware-bound context always wins; this session-scoped mint is
+        used only when nothing is bound, avoiding double-minting.
+        """
+        if self._fallback_interaction_context is None:
+            self._fallback_interaction_context = TaprootInteractionContext(
+                interaction_id=create_interaction_id()
+            )
+        return self._fallback_interaction_context
 
     @staticmethod
-    def _public_apim_propagation_headers(headers: dict[str, str]) -> dict[str, str]:
+    def _public_apim_propagation_headers(
+        headers: dict[str, str],
+        context: TaprootInteractionContext | None = None,
+    ) -> dict[str, str]:
         merged = {
             key: value
             for key, value in headers.items()
@@ -327,7 +346,8 @@ class TaprootClient:
             )
         }
         existing = {key.lower() for key in merged}
-        context = get_interaction_context()
+        if context is None:
+            context = get_interaction_context()
         if context and HEADER_INTERACTION_ID.lower() not in existing:
             merged[HEADER_INTERACTION_ID] = context.interaction_id
         if context and context.correlation_id and HEADER_CORRELATION_ID.lower() not in existing:

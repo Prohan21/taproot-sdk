@@ -62,9 +62,8 @@ class TaprootInteractionContext:
         if self.parent_activity_id is None and self.parent_interaction_id is not None:
             object.__setattr__(self, "parent_activity_id", self.parent_interaction_id)
 
-correlation_id_var: ContextVar[str | None] = ContextVar(
-    "taproot_correlation_id", default=None
-)
+
+correlation_id_var: ContextVar[str | None] = ContextVar("taproot_correlation_id", default=None)
 
 interaction_context_var: ContextVar[TaprootInteractionContext | None] = ContextVar(
     "taproot_activity_interaction_context",
@@ -115,9 +114,8 @@ def propagation_headers(
         HEADER_INTERACTION_ID: current.interaction_id,
         HEADER_INTERACTION_TYPE: current.interaction_type,
     }
-    if current.caller:
-        headers[HEADER_CALLER_ID] = current.caller.actor_id
-        headers[HEADER_CALLER_TYPE] = current.caller.actor_type
+    # Deprecated X-Taproot-Caller-* are never emitted: caller identity is
+    # computed downstream from trusted context (TAP-38), not propagated.
     if current.source_agent_id:
         headers[HEADER_SOURCE_AGENT_ID] = current.source_agent_id
     if current.root_agent_id:

@@ -191,8 +191,6 @@ class TestTaprootInteractionPropagation:
             "X-Taproot-Activity-Version": "1",
             "X-Taproot-Interaction-Id": "int-1",
             "X-Taproot-Interaction-Type": "agent_run",
-            "X-Taproot-Caller-Id": "user-1",
-            "X-Taproot-Caller-Type": "user",
             "X-Taproot-Source-Agent-Id": "agent-1",
             "X-Taproot-Root-Agent-Id": "root-agent",
             "X-Taproot-Parent-Activity-Id": "act-parent",
@@ -208,10 +206,7 @@ class TestTaprootInteractionPropagation:
         )
 
         assert context.parent_interaction_id == "upstream-int"
-        assert (
-            propagation_headers(context)["X-Taproot-Parent-Activity-Id"]
-            == "upstream-int"
-        )
+        assert propagation_headers(context)["X-Taproot-Parent-Activity-Id"] == "upstream-int"
 
     def test_merge_propagation_headers_preserves_explicit_values(self) -> None:
         context = TaprootInteractionContext(
@@ -299,10 +294,13 @@ class TestTaprootInteractionPropagation:
         headers = client._http.request.mock_calls[0].kwargs["headers"]
         assert headers["X-Taproot-Interaction-Id"] == "int-1"
         assert headers["X-Taproot-Interaction-Type"] == "agent_run"
-        assert headers["X-Taproot-Caller-Id"] == "user-1"
+        assert "X-Taproot-Caller-Id" not in headers
+        assert "X-Taproot-Caller-Type" not in headers
         assert headers["X-Taproot-Parent-Interaction-Id"] == "int-1"
 
-    async def test_asgi_instrumentation_binds_inbound_interaction_as_parent_and_resets(self) -> None:
+    async def test_asgi_instrumentation_binds_inbound_interaction_as_parent_and_resets(
+        self,
+    ) -> None:
         observed: dict[str, Any] = {}
 
         async def app(scope: dict[str, Any], receive: Any, send: Any) -> None:

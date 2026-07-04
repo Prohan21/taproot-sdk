@@ -118,6 +118,13 @@ def instrument(
                 if _cid:
                     span.set_attribute("taproot.correlation_id", _cid)
 
+                # Join ingested traces to the SoR by interaction id (WO-002 T3)
+                from taproot_sdk._context import get_interaction_context
+
+                _ictx = get_interaction_context()
+                if _ictx:
+                    span.set_attribute("taproot.interaction_id", _ictx.interaction_id)
+
                 # Capture inputs
                 if not ignore_inputs:
                     try:
@@ -177,6 +184,13 @@ def instrument(
                 _cid = correlation_id_var.get(None)
                 if _cid:
                     span.set_attribute("taproot.correlation_id", _cid)
+
+                # Join ingested traces to the SoR by interaction id (WO-002 T3)
+                from taproot_sdk._context import get_interaction_context
+
+                _ictx = get_interaction_context()
+                if _ictx:
+                    span.set_attribute("taproot.interaction_id", _ictx.interaction_id)
 
                 # Capture inputs
                 if not ignore_inputs:
