@@ -6,7 +6,6 @@ from uuid import UUID
 import httpx
 
 from taproot_sdk import TaprootClient
-from taproot_sdk.decorators import instrument
 from taproot_sdk._context import (
     HEADER_ACTIVITY_VERSION,
     HEADER_CALLER_ID,
@@ -24,6 +23,7 @@ from taproot_sdk._context import (
     reset_interaction_context,
     set_interaction_context,
 )
+from taproot_sdk.decorators import instrument
 
 
 def _client(**kwargs: object) -> TaprootClient:

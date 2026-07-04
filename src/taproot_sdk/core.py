@@ -54,7 +54,14 @@ def init(
         api_key: Optional API key for authentication.
         auto_instrument: List of LLM libraries to auto-instrument.
             Supported: "openai", "anthropic", "google", "cohere", "bedrock", "vertexai", "mistral"
-        redact_by_default: Whether to hash sensitive data in traces (default: True).
+        redact_by_default: Scrub PII/secrets from ``@instrument`` span
+            inputs/outputs before export, replacing them with stable
+            non-reversible ``redacted:`` tokens (default: True). Correlation
+            and interaction ids and ``ev.meta.*`` attributes are never
+            scrubbed. CAVEAT: spans emitted by LLM auto-instrumentors
+            (OpenLLMetry) are NOT covered — set the environment variable
+            ``TRACELOOP_TRACE_CONTENT=false`` to suppress prompt/completion
+            content in those spans.
         sampling_rate: Fraction of traces to sample (0.0 to 1.0, default: 1.0).
         batch_size: Maximum spans per export batch (default: 512).
         flush_interval_ms: Maximum time between flushes in milliseconds (default: 5000).

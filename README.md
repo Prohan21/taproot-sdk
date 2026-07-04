@@ -94,12 +94,30 @@ ev.init(
     api_url="https://...",             # Required: Taproot backend URL
     api_key="sk-...",                  # Optional: API key for authentication
     auto_instrument=["openai"],        # Optional: LLM libraries to auto-instrument
-    redact_by_default=True,            # Optional: Hash PII in traces (default: True)
+    redact_by_default=True,            # Optional: Redact PII/secrets in @instrument spans (default: True)
     sampling_rate=1.0,                 # Optional: Trace sampling rate (default: 1.0)
     batch_size=512,                    # Optional: Spans per batch (default: 512)
     flush_interval_ms=5000,            # Optional: Max time between flushes (default: 5000)
 )
 ```
+
+### PII/secret redaction
+
+With `redact_by_default=True` (the default), inputs and outputs captured by
+`@ev.instrument()` are scrubbed before export: values under sensitive keys
+(`api_key`, `password`, `token`, `secret`, `authorization`, ...) and
+secret/PII-shaped values (API-key prefixes like `sk-`/`AKIA`, JWTs, emails,
+SSNs, payment-card numbers) are replaced with stable non-reversible
+`redacted:<hash>` tokens. Correlation and interaction ids
+(`taproot.correlation_id`, `taproot.interaction_id`) and `ev.meta.*`
+attributes are never scrubbed. Pass `redact_by_default=False` (or
+`@ev.instrument(redact=False)` per function) to capture plaintext.
+
+> **Not covered:** spans emitted by the LLM auto-instrumentors (OpenAI,
+> Anthropic, etc.) are produced by OpenLLMetry, not by `@ev.instrument()`,
+> and are **not** redacted by this setting. To keep prompt/completion
+> content out of those spans, set the OpenLLMetry content-capture toggle
+> `TRACELOOP_TRACE_CONTENT=false` in your environment.
 
 ## Decorator Options
 

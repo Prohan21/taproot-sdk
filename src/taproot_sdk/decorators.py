@@ -24,6 +24,9 @@ from typing import (
 from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
+from taproot_sdk._redaction import scrub_structured, scrub_text
+from taproot_sdk.core import get_config
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -56,6 +59,7 @@ def instrument(
     ignore_inputs: bool | list[str] = False,
     ignore_outputs: bool = False,
     max_attribute_size: int = DEFAULT_MAX_ATTRIBUTE_SIZE,
+    redact: bool | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator for automatic span instrumentation.
@@ -80,6 +84,12 @@ def instrument(
         ignore_outputs: If True, don't capture the return value.
         max_attribute_size: Maximum size in bytes for input/output attributes.
             Larger values are truncated.
+        redact: Override PII/secret redaction for this function. Defaults to
+            the ``redact_by_default`` setting from ``ev.init()`` (True when
+            unset). When active, secret/PII-shaped values in captured
+            inputs/outputs are replaced with stable ``redacted:`` tokens.
+            Note: spans emitted by LLM auto-instrumentors are NOT covered
+            by this redaction (see the ``redact_by_default`` docs).
 
     Returns:
         A decorator that wraps the function with tracing.
@@ -104,6 +114,7 @@ def instrument(
         def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             tracer = trace.get_tracer("taproot-sdk")
             start_time = time.perf_counter()
+            _redact = _effective_redact(redact)
 
             with tracer.start_as_current_span(span_name) as span:
                 # Set span attributes
@@ -128,7 +139,9 @@ def instrument(
                 # Capture inputs
                 if not ignore_inputs:
                     try:
-                        inputs_str = _serialize_inputs(args, kwargs, func_signature, ignore_inputs)
+                        inputs_str = _serialize_inputs(
+                            args, kwargs, func_signature, ignore_inputs, redact=_redact
+                        )
                         _set_attribute_safe(span, "ev.data.inputs", inputs_str, max_attribute_size)
                     except Exception as e:
                         logger.debug(f"Failed to serialize inputs: {e}")
@@ -144,7 +157,7 @@ def instrument(
                     # Capture outputs
                     if not ignore_outputs:
                         try:
-                            output_str = _serialize(result)
+                            output_str = _serialize(result, redact=_redact)
                             _set_attribute_safe(
                                 span, "ev.data.outputs", output_str, max_attribute_size
                             )
@@ -171,6 +184,7 @@ def instrument(
         async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             tracer = trace.get_tracer("taproot-sdk")
             start_time = time.perf_counter()
+            _redact = _effective_redact(redact)
 
             with tracer.start_as_current_span(span_name) as span:
                 # Set span attributes
@@ -195,7 +209,9 @@ def instrument(
                 # Capture inputs
                 if not ignore_inputs:
                     try:
-                        inputs_str = _serialize_inputs(args, kwargs, func_signature, ignore_inputs)
+                        inputs_str = _serialize_inputs(
+                            args, kwargs, func_signature, ignore_inputs, redact=_redact
+                        )
                         _set_attribute_safe(span, "ev.data.inputs", inputs_str, max_attribute_size)
                     except Exception as e:
                         logger.debug(f"Failed to serialize inputs: {e}")
@@ -211,7 +227,7 @@ def instrument(
                     # Capture outputs
                     if not ignore_outputs:
                         try:
-                            output_str = _serialize(result)
+                            output_str = _serialize(result, redact=_redact)
                             _set_attribute_safe(
                                 span, "ev.data.outputs", output_str, max_attribute_size
                             )
@@ -239,11 +255,19 @@ def instrument(
     return decorator
 
 
+def _effective_redact(override: bool | None) -> bool:
+    """Resolve the redaction setting: explicit decorator override wins over config."""
+    if override is not None:
+        return override
+    return bool(get_config().get("redact_by_default", True))
+
+
 def _serialize_inputs(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     signature: inspect.Signature,
     ignore: bool | list[str],
+    redact: bool = False,
 ) -> str:
     """Serialize function inputs to JSON string."""
     if ignore is True:
@@ -263,15 +287,23 @@ def _serialize_inputs(
             "kwargs": {k: v for k, v in kwargs.items() if k not in ignore_params},
         }
 
-    return _serialize(inputs)
+    return _serialize(inputs, redact=redact)
 
 
-def _serialize(value: Any) -> str:
-    """Serialize a value to JSON string with fallback for non-serializable types."""
+def _serialize(value: Any, redact: bool = False) -> str:
+    """Serialize a value to JSON string with fallback for non-serializable types.
+
+    When *redact* is set, sensitive keys are scrubbed structurally before
+    serialization and secret/PII-shaped patterns are scrubbed from the
+    serialized string (catching values surfaced by ``_json_default``).
+    """
+    if redact:
+        value = scrub_structured(value)
     try:
-        return json.dumps(value, default=_json_default, ensure_ascii=False)
+        serialized = json.dumps(value, default=_json_default, ensure_ascii=False)
     except (TypeError, ValueError):
-        return json.dumps({"__repr__": repr(value)}, ensure_ascii=False)
+        serialized = json.dumps({"__repr__": repr(value)}, ensure_ascii=False)
+    return scrub_text(serialized) if redact else serialized
 
 
 def _json_default(obj: Any) -> Any:

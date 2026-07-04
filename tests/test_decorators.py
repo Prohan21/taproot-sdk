@@ -168,3 +168,145 @@ class TestInstrumentWithoutInit:
         # Should not raise, just won't create spans
         result = my_function(5)
         assert result == 10
+
+
+class TestRedaction:
+    """WO-013 T1: redact_by_default scrubs secrets from exported span attributes."""
+
+    JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJVadQs"
+
+    def _local_tracing(self, monkeypatch):
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
+        )
+
+        from taproot_sdk import decorators
+
+        exporter = InMemorySpanExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        monkeypatch.setattr(decorators.trace, "get_tracer", lambda name: provider.get_tracer(name))
+        return exporter
+
+    def _set_config(self, monkeypatch, **config):
+        from taproot_sdk import core
+
+        monkeypatch.setattr(core, "_config", dict(config))
+
+    def test_inputs_redacted_by_default(self, monkeypatch):
+        exporter = self._local_tracing(monkeypatch)
+
+        @instrument(spankind="tool")
+        def work(api_key: str, email: str) -> str:
+            return "ok"
+
+        work("sk-live-abc123XYZ789", "a@b.com")
+        inputs = exporter.get_finished_spans()[-1].attributes["ev.data.inputs"]
+        assert "sk-live-abc123XYZ789" not in inputs
+        assert "a@b.com" not in inputs
+        assert "redacted:" in inputs
+
+    def test_outputs_redacted_by_default(self, monkeypatch):
+        exporter = self._local_tracing(monkeypatch)
+        jwt = self.JWT
+
+        @instrument(spankind="tool")
+        def work() -> dict:
+            return {"token": "tok-value", "body": f"Bearer {jwt}"}
+
+        work()
+        outputs = exporter.get_finished_spans()[-1].attributes["ev.data.outputs"]
+        assert jwt not in outputs
+        assert "tok-value" not in outputs
+        assert "redacted:" in outputs
+
+    async def test_async_redaction(self, monkeypatch):
+        exporter = self._local_tracing(monkeypatch)
+
+        @instrument(spankind="tool")
+        async def work(password: str) -> str:
+            return "done"
+
+        await work("hunter2secret")
+        inputs = exporter.get_finished_spans()[-1].attributes["ev.data.inputs"]
+        assert "hunter2secret" not in inputs
+
+    def test_config_opt_out_reproduces_plaintext(self, monkeypatch):
+        exporter = self._local_tracing(monkeypatch)
+        self._set_config(monkeypatch, redact_by_default=False)
+
+        @instrument(spankind="tool")
+        def work(api_key: str) -> dict:
+            return {"email": "a@b.com"}
+
+        work("sk-live-abc123XYZ789")
+        span = exporter.get_finished_spans()[-1]
+        assert "sk-live-abc123XYZ789" in span.attributes["ev.data.inputs"]
+        assert "a@b.com" in span.attributes["ev.data.outputs"]
+
+    def test_decorator_override_disables_redaction(self, monkeypatch):
+        exporter = self._local_tracing(monkeypatch)
+
+        @instrument(spankind="tool", redact=False)
+        def work(api_key: str) -> str:
+            return "ok"
+
+        work("sk-live-abc123XYZ789")
+        inputs = exporter.get_finished_spans()[-1].attributes["ev.data.inputs"]
+        assert "sk-live-abc123XYZ789" in inputs
+
+    def test_decorator_override_enables_redaction(self, monkeypatch):
+        exporter = self._local_tracing(monkeypatch)
+        self._set_config(monkeypatch, redact_by_default=False)
+
+        @instrument(spankind="tool", redact=True)
+        def work(api_key: str) -> str:
+            return "ok"
+
+        work("sk-live-abc123XYZ789")
+        inputs = exporter.get_finished_spans()[-1].attributes["ev.data.inputs"]
+        assert "sk-live-abc123XYZ789" not in inputs
+
+    def test_correlation_spine_survives_redaction(self, monkeypatch):
+        """taproot.correlation_id / taproot.interaction_id / ev.meta.* pass through untouched."""
+        from taproot_sdk._context import (
+            TaprootInteractionContext,
+            correlation_id_var,
+            reset_interaction_context,
+            set_interaction_context,
+        )
+
+        exporter = self._local_tracing(monkeypatch)
+
+        @instrument(spankind="tool")
+        def work(api_key: str) -> str:
+            return "ok"
+
+        cid_token = correlation_id_var.set("corr-abc-123")
+        ictx_token = set_interaction_context(
+            TaprootInteractionContext(interaction_id="int-xyz-789")
+        )
+        try:
+            work("sk-live-abc123XYZ789")
+        finally:
+            reset_interaction_context(ictx_token)
+            correlation_id_var.reset(cid_token)
+
+        span = exporter.get_finished_spans()[-1]
+        assert span.attributes["taproot.correlation_id"] == "corr-abc-123"
+        assert span.attributes["taproot.interaction_id"] == "int-xyz-789"
+        assert span.attributes["ev.meta.function"] == "work"
+        assert "sk-live-abc123XYZ789" not in span.attributes["ev.data.inputs"]
+
+    def test_ignore_inputs_still_wins(self, monkeypatch):
+        exporter = self._local_tracing(monkeypatch)
+
+        @instrument(spankind="tool", ignore_inputs=True)
+        def work(api_key: str) -> str:
+            return "ok"
+
+        work("sk-live-abc123XYZ789")
+        span = exporter.get_finished_spans()[-1]
+        assert "ev.data.inputs" not in span.attributes
